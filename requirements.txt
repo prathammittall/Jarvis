@@ -1,0 +1,40 @@
+# Core
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+requests>=2.31.0
+psutil>=5.9.0
+
+# Speech
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.26.0
+scipy>=1.11.0
+piper-tts>=1.2.0
+soundfile>=0.12.0
+
+# Wake Word
+openwakeword>=0.6.0
+onnxruntime>=1.16.0
+
+# UI
+PySide6>=6.6.0
+
+# Browser
+playwright>=1.40.0
+
+# Windows
+pywin32>=306; sys_platform == "win32"
+pycaw>=20240210; sys_platform == "win32"
+screen-brightness-control>=0.23.0; sys_platform == "win32"
+mss>=9.0.0
+
+# Database
+# sqlite3 is stdlib
+
+# Dev / Test
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+
+# Packaging (optional)
+pyinstaller>=6.3.0
