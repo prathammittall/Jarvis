@@ -66,10 +66,20 @@ def validate_action(data: dict[str, Any], known_tools: set[str]) -> dict[str, An
 
 
 def is_confirmation(text: str) -> bool:
-    affirmatives = {"yes", "yeah", "yep", "confirm", "do it", "go ahead", "sure", "ok", "okay", "proceed"}
-    return text.lower().strip().rstrip(".") in affirmatives
+    t = text.lower().strip().rstrip(".!")
+    affirmatives = {
+        "yes", "yeah", "yep", "confirm", "do it", "go ahead", "sure", "ok", "okay", "proceed",
+        "haan", "haaji", "ha", "ji", "han", "bilkul", "theek hai", "thik hai",
+        "हाँ", "हां", "जी", "ठीक है", "बिल्कुल",
+    }
+    return t in affirmatives
 
 
 def is_denial(text: str) -> bool:
-    negatives = {"no", "nope", "cancel", "don't", "stop", "never mind", "nevermind", "abort"}
-    return text.lower().strip().rstrip(".") in negatives
+    t = text.lower().strip().rstrip(".!")
+    negatives = {
+        "no", "nope", "cancel", "don't", "stop", "never mind", "nevermind", "abort",
+        "nahi", "nahin", "mat", "mat karo", "cancel karo",
+        "नहीं", "नही", "मत", "रद्द",
+    }
+    return t in negatives

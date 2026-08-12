@@ -2,10 +2,12 @@
   "commands": [
     {
       "name": "open_chrome",
+      "intent": "OPEN_APP",
       "phrases": [
         "open chrome", "launch chrome", "start chrome", "chrome kholo",
         "chrome khol do", "chrome open karo", "chrome khol de", "chrome chala de",
-        "open google chrome", "start google chrome"
+        "open google chrome", "start google chrome", "chrome ko kholo",
+        "chrome open kar do", "browser kholo", "क्रोम खोलो"
       ],
       "action": "open_application",
       "arguments": { "application": "chrome" },
@@ -13,6 +15,7 @@
     },
     {
       "name": "open_edge",
+      "intent": "OPEN_APP",
       "phrases": [
         "open edge", "launch edge", "start edge", "open microsoft edge",
         "edge kholo", "edge open karo"
@@ -23,6 +26,7 @@
     },
     {
       "name": "open_firefox",
+      "intent": "OPEN_APP",
       "phrases": [
         "open firefox", "launch firefox", "start firefox", "firefox kholo"
       ],
@@ -32,6 +36,7 @@
     },
     {
       "name": "open_vscode",
+      "intent": "OPEN_APP",
       "phrases": [
         "open vscode", "open vs code", "open visual studio code", "launch vscode",
         "start vscode", "start vs code", "vscode kholo", "vs code kholo",
@@ -44,6 +49,7 @@
     },
     {
       "name": "open_spotify",
+      "intent": "OPEN_APP",
       "phrases": [
         "open spotify", "launch spotify", "start spotify", "spotify kholo",
         "spotify chala de", "spotify open karo"
@@ -54,6 +60,7 @@
     },
     {
       "name": "open_discord",
+      "intent": "OPEN_APP",
       "phrases": [
         "open discord", "launch discord", "start discord", "discord kholo"
       ],
@@ -63,8 +70,10 @@
     },
     {
       "name": "open_notepad",
+      "intent": "OPEN_APP",
       "phrases": [
-        "open notepad", "launch notepad", "start notepad", "notepad kholo"
+        "open notepad", "launch notepad", "start notepad", "notepad kholo",
+        "notepad open karo", "notepad khol do", "नोटपैड खोलो"
       ],
       "action": "open_application",
       "arguments": { "application": "notepad" },
@@ -72,9 +81,10 @@
     },
     {
       "name": "open_calculator",
+      "intent": "OPEN_APP",
       "phrases": [
         "open calculator", "launch calculator", "start calculator",
-        "open calc", "calculator kholo"
+        "open calc", "calculator kholo", "calc kholo"
       ],
       "action": "open_application",
       "arguments": { "application": "calculator" },
@@ -82,6 +92,7 @@
     },
     {
       "name": "open_explorer",
+      "intent": "OPEN_APP",
       "phrases": [
         "open file explorer", "open explorer", "open files", "launch explorer",
         "file explorer kholo", "explorer kholo"
@@ -92,6 +103,7 @@
     },
     {
       "name": "open_terminal",
+      "intent": "OPEN_APP",
       "phrases": [
         "open terminal", "open windows terminal", "launch terminal",
         "terminal kholo", "open cmd", "open powershell"
@@ -102,9 +114,11 @@
     },
     {
       "name": "volume_up",
+      "intent": "INCREASE_VOLUME",
       "phrases": [
         "volume up", "increase volume", "turn volume up", "raise volume",
-        "volume badhao", "awaz badhao", "sound badhao"
+        "volume badhao", "volume badha do", "awaz badhao", "sound badhao",
+        "वॉल्यूम बढ़ा दो", "आवाज़ बढ़ाओ"
       ],
       "action": "volume_control",
       "arguments": { "action": "up" },
@@ -112,9 +126,11 @@
     },
     {
       "name": "volume_down",
+      "intent": "DECREASE_VOLUME",
       "phrases": [
         "volume down", "decrease volume", "turn volume down", "lower volume",
-        "volume kam karo", "awaz kam karo", "sound kam karo"
+        "volume kam karo", "volume kam kar do", "awaz kam karo", "sound kam karo",
+        "वॉल्यूम कम कर दो", "आवाज़ कम करो"
       ],
       "action": "volume_control",
       "arguments": { "action": "down" },
@@ -122,6 +138,7 @@
     },
     {
       "name": "mute",
+      "intent": "MUTE",
       "phrases": [
         "mute", "mute volume", "mute sound", "silence", "awaz band karo", "mute karo"
       ],
@@ -131,6 +148,7 @@
     },
     {
       "name": "unmute",
+      "intent": "UNMUTE",
       "phrases": [
         "unmute", "unmute volume", "unmute sound", "awaz chalu karo", "unmute karo"
       ],
@@ -140,6 +158,7 @@
     },
     {
       "name": "lock_pc",
+      "intent": "LOCK_PC",
       "phrases": [
         "lock my pc", "lock pc", "lock computer", "lock the computer",
         "lock my computer", "lock screen", "pc lock karo", "computer lock karo"
@@ -150,6 +169,7 @@
     },
     {
       "name": "screenshot",
+      "intent": "TAKE_SCREENSHOT",
       "phrases": [
         "take a screenshot", "take screenshot", "capture screenshot",
         "screenshot lo", "screenshot le lo", "screen capture"
@@ -160,9 +180,10 @@
     },
     {
       "name": "play_music",
+      "intent": "PLAY_MEDIA",
       "phrases": [
         "play music", "resume music", "play song", "music chalao",
-        "gaana chalao", "play media"
+        "gaana chalao", "play media", "music chala do"
       ],
       "action": "media_control",
       "arguments": { "action": "play" },
@@ -170,6 +191,7 @@
     },
     {
       "name": "pause_music",
+      "intent": "PAUSE_MEDIA",
       "phrases": [
         "pause music", "pause song", "pause media", "music pause karo",
         "gaana pause karo"
@@ -180,6 +202,7 @@
     },
     {
       "name": "stop_music",
+      "intent": "STOP_MEDIA",
       "phrases": [
         "stop music", "stop song", "stop media", "music band karo"
       ],
@@ -189,6 +212,7 @@
     },
     {
       "name": "next_song",
+      "intent": "NEXT_TRACK",
       "phrases": [
         "next song", "next track", "skip song", "aglai gaana", "next gaana"
       ],
@@ -198,6 +222,7 @@
     },
     {
       "name": "previous_song",
+      "intent": "PREV_TRACK",
       "phrases": [
         "previous song", "previous track", "last song", "pichla gaana", "prev song"
       ],
@@ -207,6 +232,7 @@
     },
     {
       "name": "what_time",
+      "intent": "GET_TIME",
       "phrases": [
         "what time is it", "what's the time", "current time", "time batao",
         "kitna time hua", "tell me the time"
@@ -237,8 +263,11 @@
     },
     {
       "name": "open_youtube",
+      "intent": "OPEN_WEBSITE",
       "phrases": [
-        "open youtube", "launch youtube", "youtube kholo", "youtube open karo"
+        "open youtube", "launch youtube", "youtube kholo", "youtube open karo",
+        "youtube chalao", "youtube play karo", "यूट्यूब खोलो",
+        "chrome mein youtube open karo"
       ],
       "action": "open_youtube",
       "arguments": {},
@@ -246,9 +275,12 @@
     },
     {
       "name": "shutdown",
+      "intent": "SHUTDOWN",
       "phrases": [
         "shut down the computer", "shutdown the computer", "shutdown",
-        "shut down", "turn off the computer", "pc band karo", "computer band karo"
+        "shut down", "turn off the computer", "pc band karo", "computer band karo",
+        "computer shutdown karo", "laptop shutdown karo", "mera laptop shutdown karo",
+        "कंप्यूटर बंद कर दो"
       ],
       "action": "system_power",
       "arguments": { "action": "shutdown" },
@@ -256,6 +288,7 @@
     },
     {
       "name": "restart",
+      "intent": "RESTART",
       "phrases": [
         "restart the computer", "reboot", "restart pc", "reboot the computer",
         "pc restart karo"
@@ -266,6 +299,7 @@
     },
     {
       "name": "sleep",
+      "intent": "SLEEP",
       "phrases": [
         "sleep", "put computer to sleep", "sleep the computer", "pc sleep karo"
       ],

@@ -31,11 +31,17 @@ def main() -> int:
     fast_phrases = [
         "open chrome",
         "chrome kholo",
+        "chrome open karo",
+        "Open Chrome",
+        "Google pe Python search karo",
+        "volume badha do",
         "open vscode",
         "volume up",
         "mute",
         "pause music",
         "take a screenshot",
+        "music chalao",
+        "notepad kholo",
     ]
 
     print("Fast router matches:")

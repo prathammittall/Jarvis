@@ -41,10 +41,16 @@ class Settings(BaseSettings):
     # Fast commands
     fast_commands_enabled: bool = True
     commands_config: str = "config/commands.json"
+
+    # Language: en | hi | hinglish (response default when detection is ambiguous)
+    default_language: str = "en"
+
     # Whisper STT
     whisper_model: str = "small"
     whisper_device: str = "auto"
     whisper_compute_type: str = "auto"
+    # auto = multilingual detection (en/hi); or en / hi
+    whisper_language: str = "auto"
 
     # Wake word
     wake_word_enabled: bool = True
@@ -55,6 +61,7 @@ class Settings(BaseSettings):
     # TTS
     tts_enabled: bool = True
     tts_voice: str = "en_US-lessac-medium"
+    tts_voice_hi: str = "hi_IN-pratham-medium"
     tts_speed: float = 1.0
 
     # Audio

@@ -147,7 +147,13 @@ class WakeWordDetector:
             return
 
         last_fire = 0.0
-        logger.info("Wake word ready — say 'Jarvis' (threshold=%.2f)", threshold)
+        last_score_log = 0.0
+        max_recent = 0.0
+        logger.info(
+            "Wake word ready — say 'Hey Jarvis' (threshold=%.2f, mic=%s)",
+            threshold,
+            settings.microphone_index,
+        )
 
         while self._running:
             # Wait while paused / disabled
@@ -157,9 +163,10 @@ class WakeWordDetector:
                 break
 
             detected = threading.Event()
+            max_recent = 0.0
 
             def audio_callback(indata, frames, time_info, status):
-                nonlocal last_fire
+                nonlocal last_fire, max_recent
                 if self._paused.is_set() or not self._enabled or not self._running:
                     return
                 if status:
@@ -168,11 +175,17 @@ class WakeWordDetector:
                 pcm = (indata[:, 0] * 32767).astype(np.int16)
                 prediction = model.predict(pcm)
                 for mdl_name, score in prediction.items():
-                    if score >= 0.15:
+                    if score >= 0.05:
                         logger.debug("Wake score %s=%.2f", mdl_name, score)
+                    if score > max_recent:
+                        max_recent = float(score)
                     if score >= threshold and (time.time() - last_fire) > 1.5:
                         last_fire = time.time()
                         logger.info("Wake word detected: %s (score=%.2f)", mdl_name, score)
+                        try:
+                            model.reset()
+                        except Exception:
+                            pass
                         detected.set()
 
             try:
@@ -195,6 +208,14 @@ class WakeWordDetector:
                         if self._on_detected:
                             self._on_detected()
                         break
+                    now = time.time()
+                    if now - last_score_log >= 3.0:
+                        if max_recent > 0:
+                            logger.info("Wake listening… peak score=%.2f (need >=%.2f)", max_recent, threshold)
+                        else:
+                            logger.debug("Wake listening… no speech scores yet")
+                        max_recent = 0.0
+                        last_score_log = now
                     time.sleep(0.05)
 
                 self._close_stream()
@@ -205,18 +226,25 @@ class WakeWordDetector:
 
 
 class WhisperWakeWordDetector:
-    """Listen for the single wake word 'Jarvis' using a tiny Whisper model."""
+    """Listen for 'Jarvis' using a tiny Whisper model (works with single-word)."""
 
-    KEYWORDS = ("jarvis", "hey jarvis", "ok jarvis", "hi jarvis")
+    KEYWORDS = ("jarvis", "hey jarvis", "ok jarvis", "hi jarvis", "yo jarvis")
+    # Common Whisper mishearings of "Jarvis"
+    FUZZY = ("jarvis", "jarviss", "jarves", "jarvus", "jervis", "gervis")
 
     def __init__(self, on_detected: Callable[[], None] | None = None) -> None:
         self._settings = get_settings()
         self._on_detected = on_detected
         self._running = False
-        self._paused = False
+        self._paused = threading.Event()
         self._thread: threading.Thread | None = None
         self._enabled = True
         self._tiny_model = None
+        self._stream: sd.InputStream | None = None
+        self._stream_lock = threading.Lock()
+        self._audio_buf: list[np.ndarray] = []
+        self._buf_lock = threading.Lock()
+        self._samples_ready = 0
 
     @property
     def enabled(self) -> bool:
@@ -227,15 +255,19 @@ class WhisperWakeWordDetector:
         self._enabled = value
 
     def pause(self) -> None:
-        self._paused = True
+        self._paused.set()
+        self._close_stream()
+        logger.info("Wake word mic released")
 
     def resume(self) -> None:
-        self._paused = False
+        self._paused.clear()
+        logger.info("Wake word listening resumed")
 
     def start(self) -> None:
         if self._running:
             return
         self._running = True
+        self._paused.clear()
         self._thread = threading.Thread(
             target=self._listen_loop, daemon=True, name="wakeword-whisper"
         )
@@ -244,8 +276,24 @@ class WhisperWakeWordDetector:
 
     def stop(self) -> None:
         self._running = False
+        self._paused.clear()
+        self._close_stream()
         if self._thread:
             self._thread.join(timeout=3)
+            self._thread = None
+
+    def _close_stream(self) -> None:
+        with self._stream_lock:
+            if self._stream is not None:
+                try:
+                    self._stream.stop()
+                    self._stream.close()
+                except Exception:
+                    pass
+                self._stream = None
+        with self._buf_lock:
+            self._audio_buf.clear()
+            self._samples_ready = 0
 
     def _get_tiny_model(self):
         if self._tiny_model is None:
@@ -271,37 +319,118 @@ class WhisperWakeWordDetector:
             beam_size=1,
             vad_filter=False,
             condition_on_previous_text=False,
+            without_timestamps=True,
         )
         return " ".join(seg.text.strip() for seg in segments).strip().lower()
 
-    def _listen_loop(self) -> None:
-        from app.wakeword.audio import AudioCapture
+    @classmethod
+    def _matches_wake(cls, text: str) -> bool:
+        if not text:
+            return False
+        cleaned = "".join(c if c.isalnum() or c.isspace() else " " for c in text.lower())
+        cleaned = " ".join(cleaned.split())
+        if any(kw in cleaned for kw in cls.KEYWORDS):
+            return True
+        tokens = cleaned.split()
+        return any(any(f in tok for f in cls.FUZZY) for tok in tokens)
 
-        capture = AudioCapture()
-        logger.info("Listening for wake word: Jarvis")
+    def _listen_loop(self) -> None:
+        settings = self._settings
+        sample_rate = 16000
+        chunk_size = 1280  # 80ms
+        window_samples = int(sample_rate * 1.5)  # ~1.5s analyze window
+        hop_samples = int(sample_rate * 0.75)  # re-check every 0.75s
+        last_fire = 0.0
+
+        logger.info("Listening for wake word: Jarvis (Whisper)")
+        try:
+            self._get_tiny_model()
+        except Exception as e:
+            logger.error("Failed to load Whisper wake model: %s", e)
+            return
 
         while self._running:
-            if not self._enabled or self._paused:
+            while self._running and (self._paused.is_set() or not self._enabled):
                 time.sleep(0.1)
-                continue
+            if not self._running:
+                break
+
+            def audio_callback(indata, frames, time_info, status):
+                if self._paused.is_set() or not self._enabled or not self._running:
+                    return
+                if status:
+                    logger.warning("Wake word audio status: %s", status)
+                chunk = indata[:, 0].copy()
+                with self._buf_lock:
+                    self._audio_buf.append(chunk)
+                    self._samples_ready += len(chunk)
+                    # Keep only ~3s of audio
+                    max_keep = sample_rate * 3
+                    while self._samples_ready > max_keep and self._audio_buf:
+                        dropped = self._audio_buf.pop(0)
+                        self._samples_ready -= len(dropped)
+
             try:
-                audio = capture.record_fixed(1.2)
-                if self._paused or not self._running:
-                    continue
-                rms = float(np.sqrt(np.mean(audio ** 2)))
-                if rms < 0.006:
-                    continue
-                text = self._transcribe_chunk(audio)
-                if text:
-                    logger.debug("Wake heard: %r (rms=%.3f)", text, rms)
-                if any(kw in text for kw in self.KEYWORDS):
-                    logger.info("Wake word detected: %s", text)
-                    self._paused = True
-                    if self._on_detected:
-                        self._on_detected()
+                with self._stream_lock:
+                    self._stream = sd.InputStream(
+                        samplerate=sample_rate,
+                        channels=1,
+                        dtype="float32",
+                        blocksize=chunk_size,
+                        device=settings.microphone_index,
+                        callback=audio_callback,
+                    )
+                    self._stream.start()
+
+                next_check = time.time() + 0.8
+                while self._running and not self._paused.is_set() and self._enabled:
+                    now = time.time()
+                    if now < next_check:
+                        time.sleep(0.05)
+                        continue
+                    next_check = now + 0.75
+
+                    with self._buf_lock:
+                        if self._samples_ready < window_samples:
+                            continue
+                        audio = np.concatenate(self._audio_buf)
+                        # Use the most recent window
+                        audio = audio[-window_samples:]
+                        # Drop hop so next window overlaps
+                        drop = 0
+                        while drop < hop_samples and self._audio_buf:
+                            first = self._audio_buf[0]
+                            if drop + len(first) <= hop_samples:
+                                self._audio_buf.pop(0)
+                                self._samples_ready -= len(first)
+                                drop += len(first)
+                            else:
+                                take = hop_samples - drop
+                                self._audio_buf[0] = first[take:]
+                                self._samples_ready -= take
+                                drop += take
+
+                    rms = float(np.sqrt(np.mean(audio ** 2)))
+                    if rms < 0.004:
+                        continue
+
+                    text = self._transcribe_chunk(audio)
+                    if text:
+                        logger.info("Wake heard: %r (rms=%.3f)", text, rms)
+                    if self._matches_wake(text) and (time.time() - last_fire) > 1.5:
+                        last_fire = time.time()
+                        logger.info("Wake word detected: %s", text)
+                        self._paused.set()
+                        self._close_stream()
+                        if self._on_detected:
+                            self._on_detected()
+                        break
+
+                self._close_stream()
             except Exception as e:
                 logger.error("Whisper wake word error: %s", e)
-                time.sleep(1)
+                self._close_stream()
+                time.sleep(1.0)
 
 
 def create_detector(on_detected: Callable[[], None] | None = None):

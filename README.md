@@ -110,7 +110,23 @@ Examples that stay local (no Grok):
 
 ## Languages
 
-Jarvis accepts English, Hindi, Punjabi, and mixed speech. The fast router matches configured phrases; Grok understands code-switching for complex requests. No manual language switch is required.
+Jarvis accepts English, Hindi (Devanagari), and Hinglish without a language mode switch.
+
+Pipeline: **STT (auto en/hi)** → **language detect** → **verb/intent normalize** → **fast router** → tool → **TTS in matching language**.
+
+Examples that stay local (no LLM):
+
+| You say | Intent |
+|---------|--------|
+| Open Chrome | OPEN_APP |
+| Chrome kholo / Chrome open karo | OPEN_APP |
+| क्रोम खोलो | OPEN_APP |
+| Volume badha do | INCREASE_VOLUME |
+| Google pe Python search karo | SEARCH_WEB |
+
+Config: `DEFAULT_LANGUAGE=en`, `WHISPER_LANGUAGE=auto`. Hindi TTS uses Windows SAPI when a `hi-IN` voice is installed; otherwise falls back gracefully.
+
+Enable multilingual debug with `DEBUG_MODE=true` or `python run_jarvis.py --debug`.
 
 ## Running JARVIS
 

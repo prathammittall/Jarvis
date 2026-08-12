@@ -126,6 +126,7 @@ class Agent:
                 timings["total"] = time.perf_counter() - total_start
                 self._log_perf(timings, label="FAST")
                 self._debug("FAST", f"{fast_result.get('fast_command')} -> {fast_result.get('tool')}")
+                self._emit_multilingual_debug(fast_result, timings.get("total", 0.0))
                 return fast_result
 
         # 2) LLM path: Grok → Ollama
@@ -154,6 +155,22 @@ class Agent:
                 parts.append(f"{key}={timings[key]:.3f}s")
         if parts:
             logger.info("[PERF][%s] %s", label, " | ".join(parts))
+
+    def _emit_multilingual_debug(self, result: dict[str, Any], total: float) -> None:
+        if not self._settings.debug_mode:
+            return
+        dbg = result.get("debug") or {}
+        lines = [
+            f'Speech: "{dbg.get("speech") or ""}"',
+            f"Detected language: {dbg.get('language') or result.get('language', '?')}",
+            f"Normalized: \"{dbg.get('normalized') or result.get('normalized', '')}\"",
+            f"Intent: {dbg.get('intent') or result.get('intent', '?')}",
+            f"Target: {dbg.get('target') or ''}",
+            f"Execution: {dbg.get('execution') or ('SUCCESS' if result.get('success') else 'FAILED')}",
+            f"Latency: {total:.2f}s",
+        ]
+        for line in lines:
+            self._debug("ML", line)
 
     def _handle_confirmation(self, command: str) -> dict[str, Any]:
         if is_confirmation(command):

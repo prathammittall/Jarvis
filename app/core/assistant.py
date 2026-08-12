@@ -169,11 +169,13 @@ class JarvisAssistant:
         self._events.emit(EventType.STATUS_TEXT, text=text)
 
         if not text:
-            msg = "I didn't catch that."
+            from app.brain.responses import error_response
+            msg = error_response("not_caught")
             self._events.emit(EventType.RESPONSE, text=msg)
             self._tts.speak(msg)
             return
 
+        self._debug("STT", f'"{text}" (whisper_lang={getattr(self._stt, "last_language", "?")})')
         self._process_text(text)
 
     def _process_text(self, text: str) -> None:
@@ -197,7 +199,7 @@ class JarvisAssistant:
             self._events.emit(EventType.RESPONSE, text=response)
             self._events.emit(EventType.SPEECH_STARTED, text=response)
             tts_start = time.perf_counter()
-            self._tts.speak(response)
+            self._tts.speak(response, language=result.get("language"))
             logger.info("Perf: TTS=%.2fs", time.perf_counter() - tts_start)
             self._events.emit(EventType.SPEECH_FINISHED)
 
@@ -220,7 +222,7 @@ class JarvisAssistant:
             self._events.emit(EventType.RESPONSE, text=response)
             self._events.emit(EventType.SPEECH_STARTED, text=response)
             tts_start = time.perf_counter()
-            self._tts.speak(response)
+            self._tts.speak(response, language=result.get("language"))
             logger.info("Perf: TTS=%.2fs", time.perf_counter() - tts_start)
             self._events.emit(EventType.SPEECH_FINISHED)
 
@@ -240,7 +242,7 @@ class JarvisAssistant:
         response = result.get("response", "")
         if response and self._settings.tts_enabled:
             self._state.transition(AssistantState.SPEAKING)
-            self._tts.speak(response)
+            self._tts.speak(response, language=result.get("language"))
         return result
 
     def preload_models(self) -> None:
