@@ -12,39 +12,40 @@ from app.tools.registry import RiskLevel, ToolDefinition
 def _volume_control(args: dict[str, Any]) -> dict[str, Any]:
     action = args.get("action", "up").lower()
     try:
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from pycaw.pycaw import AudioUtilities
 
-        devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
+        speakers = AudioUtilities.GetSpeakers()
+        volume = speakers.EndpointVolume
 
         if action == "mute":
             volume.SetMute(1, None)
             return {"success": True, "message": "Muted."}
-        elif action == "unmute":
+        if action == "unmute":
             volume.SetMute(0, None)
             return {"success": True, "message": "Unmuted."}
-        elif action == "up":
+        if action == "up":
             current = volume.GetMasterVolumeLevelScalar()
             volume.SetMasterVolumeLevelScalar(min(1.0, current + 0.1), None)
             return {"success": True, "message": "Volume increased."}
-        elif action == "down":
+        if action == "down":
             current = volume.GetMasterVolumeLevelScalar()
             volume.SetMasterVolumeLevelScalar(max(0.0, current - 0.1), None)
             return {"success": True, "message": "Volume decreased."}
         return {"success": False, "error": f"Unknown action: {action}"}
-    except ImportError:
-        # Fallback using nircmd or powershell
-        ps_map = {"mute": "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
-                  "up": "(New-Object -ComObject WScript.Shell).SendKeys([char]175)",
-                  "down": "(New-Object -ComObject WScript.Shell).SendKeys([char]174)"}
-        cmd = ps_map.get(action)
-        if cmd:
-            subprocess.run(["powershell", "-Command", cmd], capture_output=True)
+    except Exception as e:
+        # Fallback: Windows volume media keys via keybd_event
+        try:
+            import ctypes
+            VK = {"mute": 0xAD, "up": 0xAF, "down": 0xAE}
+            vk = VK.get(action if action != "unmute" else "mute")
+            if vk is None:
+                return {"success": False, "error": str(e)}
+            # unmute = toggle mute twice if currently muted is unknown; send mute toggle once for mute/unmute
+            ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
             return {"success": True, "message": f"Volume {action}."}
-        return {"success": False, "error": "Volume control unavailable."}
+        except Exception as e2:
+            return {"success": False, "error": f"{e}; fallback failed: {e2}"}
 
 
 def _lock_computer(args: dict[str, Any]) -> dict[str, Any]:

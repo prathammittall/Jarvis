@@ -55,6 +55,8 @@ VALID_TRANSITIONS: dict[AssistantState, set[AssistantState]] = {
     },
     AssistantState.TRANSCRIBING: {
         AssistantState.THINKING,
+        AssistantState.EXECUTING,
+        AssistantState.SPEAKING,
         AssistantState.LISTENING_FOR_WAKE_WORD,
         AssistantState.ERROR,
         AssistantState.STOPPED,

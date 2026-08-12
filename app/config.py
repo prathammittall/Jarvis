@@ -24,10 +24,23 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Ollama
+    # Ollama (offline fallback)
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = ""
+    ollama_keep_alive: str = "-1"
+    ollama_warmup_enabled: bool = True
+    ollama_timeout: float = 120.0
 
+    # Grok / xAI (primary cloud LLM)
+    grok_enabled: bool = True
+    grok_api_key: str = ""
+    grok_model: str = "grok-3-mini"
+    grok_base_url: str = "https://api.x.ai/v1"
+    grok_timeout: float = 10.0
+
+    # Fast commands
+    fast_commands_enabled: bool = True
+    commands_config: str = "config/commands.json"
     # Whisper STT
     whisper_model: str = "small"
     whisper_device: str = "auto"
@@ -36,7 +49,7 @@ class Settings(BaseSettings):
     # Wake word
     wake_word_enabled: bool = True
     wake_word_engine: str = "openwakeword"
-    wake_word_threshold: float = 0.5
+    wake_word_threshold: float = 0.3
     wake_word_model: str = "hey_jarvis"
 
     # TTS
@@ -76,6 +89,21 @@ class Settings(BaseSettings):
         if v == "" or v is None:
             return None
         return int(v)
+
+    @field_validator("ollama_keep_alive", mode="before")
+    @classmethod
+    def keep_alive_as_str(cls, v: Any) -> str:
+        if v is None:
+            return "-1"
+        return str(v).strip()
+
+    @field_validator("grok_api_key", mode="before")
+    @classmethod
+    def grok_key_from_aliases(cls, v: Any) -> str:
+        """Accept GROK_API_KEY or fall back to XAI_API_KEY from the environment."""
+        if v:
+            return str(v).strip()
+        return (os.environ.get("XAI_API_KEY") or "").strip()
 
     @property
     def projects_path(self) -> Path:

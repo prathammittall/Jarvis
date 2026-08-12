@@ -96,10 +96,23 @@ class JarvisAssistant:
         if self._wake_detector:
             self._wake_detector.enabled = enabled
 
+    def activate(self) -> None:
+        """Manual activation (click-to-talk / push-to-talk)."""
+        self._on_wake_word()
+
+    def _pause_wake(self) -> None:
+        if self._wake_detector and hasattr(self._wake_detector, "pause"):
+            self._wake_detector.pause()
+
+    def _resume_wake(self) -> None:
+        if self._wake_detector and hasattr(self._wake_detector, "resume"):
+            self._wake_detector.resume()
+
     def _on_wake_word(self) -> None:
         if self._processing or not self._running:
             return
         self._processing = True
+        self._pause_wake()
         threading.Thread(target=self._handle_wake_word, daemon=True).start()
 
     def _handle_wake_word(self) -> None:
@@ -114,27 +127,41 @@ class JarvisAssistant:
                 except Exception:
                     pass
 
+            # Brief pause so wake audio / beep doesn't get captured as the command
+            time.sleep(0.35)
             self._state.transition(AssistantState.LISTENING_FOR_COMMAND)
             self._tts.speak("Yes?", block=True)
+            time.sleep(0.25)
 
             self._listen_and_process()
         except Exception as e:
-            logger.error("Wake word handling error: %s", e)
-            self._state.transition(AssistantState.ERROR)
+            logger.error("Wake word handling error: %s", e, exc_info=True)
+            self._state.force(AssistantState.ERROR)
+            self._events.emit(EventType.RESPONSE, text=f"Error: {e}")
+            time.sleep(1.0)
         finally:
             self._processing = False
             if self._running:
-                self._state.transition(AssistantState.LISTENING_FOR_WAKE_WORD)
+                self._state.force(AssistantState.LISTENING_FOR_WAKE_WORD)
+                self._resume_wake()
+                logger.info("Returned to wake-word listening")
+
+    def _emit_level(self, level: float) -> None:
+        self._events.emit(EventType.AUDIO_LEVEL, level=level)
 
     def _listen_and_process(self) -> None:
         self._state.transition(AssistantState.LISTENING_FOR_COMMAND)
-        audio = self._capture.record_until_silence()
+        self._events.emit(EventType.STATUS_TEXT, text="Receiving voice command…")
+        audio = self._capture.record_until_silence(on_level=self._emit_level)
 
         if len(audio) == 0:
-            self._tts.speak("I didn't hear anything.")
+            msg = "I didn't hear anything."
+            self._events.emit(EventType.RESPONSE, text=msg)
+            self._tts.speak(msg)
             return
 
         self._state.transition(AssistantState.TRANSCRIBING)
+        self._events.emit(EventType.STATUS_TEXT, text="Converting speech to text…")
         text = self._stt.transcribe(audio)
         self._last_command = text
         self._events.emit(EventType.TRANSCRIPTION, text=text)
@@ -142,43 +169,73 @@ class JarvisAssistant:
         self._events.emit(EventType.STATUS_TEXT, text=text)
 
         if not text:
-            self._tts.speak("I didn't catch that.")
+            msg = "I didn't catch that."
+            self._events.emit(EventType.RESPONSE, text=msg)
+            self._tts.speak(msg)
             return
 
         self._process_text(text)
 
     def _process_text(self, text: str) -> None:
-        self._state.transition(AssistantState.THINKING)
+        # Fast path skips "Thinking" UI state
+        from app.brain.fast_commands import get_fast_router
+        if self._settings.fast_commands_enabled and get_fast_router().match(text):
+            self._state.transition(AssistantState.EXECUTING)
+        else:
+            self._state.transition(AssistantState.THINKING)
+
         result = self._agent.process_command(text)
+
+        if result.get("source") == "fast" and not result.get("awaiting_confirmation"):
+            if self._state.state != AssistantState.EXECUTING:
+                self._state.transition(AssistantState.EXECUTING)
 
         if result.get("awaiting_confirmation"):
             self._state.transition(AssistantState.AWAITING_CONFIRMATION)
             self._state.transition(AssistantState.SPEAKING)
-            self._events.emit(EventType.SPEECH_STARTED)
-            self._tts.speak(result["response"])
+            response = result.get("response", "")
+            self._events.emit(EventType.RESPONSE, text=response)
+            self._events.emit(EventType.SPEECH_STARTED, text=response)
+            tts_start = time.perf_counter()
+            self._tts.speak(response)
+            logger.info("Perf: TTS=%.2fs", time.perf_counter() - tts_start)
             self._events.emit(EventType.SPEECH_FINISHED)
 
-            # Listen for confirmation
             self._state.transition(AssistantState.LISTENING_FOR_COMMAND)
-            audio = self._capture.record_until_silence(max_duration=5.0)
+            self._events.emit(EventType.STATUS_TEXT, text="Waiting for confirmation…")
+            audio = self._capture.record_until_silence(
+                max_duration=5.0, on_level=self._emit_level,
+            )
             if len(audio) > 0:
                 confirm_text = self._stt.transcribe(audio)
+                self._events.emit(EventType.TRANSCRIPTION, text=confirm_text)
                 self._state.transition(AssistantState.THINKING)
                 result = self._agent.process_command(confirm_text)
-        elif result.get("tool"):
+        elif result.get("tool") and result.get("source") != "fast":
             self._state.transition(AssistantState.EXECUTING)
 
         response = result.get("response", "")
         if response:
             self._state.transition(AssistantState.SPEAKING)
-            self._events.emit(EventType.SPEECH_STARTED)
+            self._events.emit(EventType.RESPONSE, text=response)
+            self._events.emit(EventType.SPEECH_STARTED, text=response)
+            tts_start = time.perf_counter()
             self._tts.speak(response)
+            logger.info("Perf: TTS=%.2fs", time.perf_counter() - tts_start)
             self._events.emit(EventType.SPEECH_FINISHED)
 
     def process_text_command(self, text: str) -> dict:
         """Process a text command directly (for CLI/debug mode)."""
         self._last_command = text
-        self._state.transition(AssistantState.THINKING)
+        if self._settings.fast_commands_enabled:
+            from app.brain.fast_commands import get_fast_router
+            if get_fast_router().match(text):
+                self._state.transition(AssistantState.EXECUTING)
+            else:
+                self._state.transition(AssistantState.THINKING)
+        else:
+            self._state.transition(AssistantState.THINKING)
+
         result = self._agent.process_command(text)
         response = result.get("response", "")
         if response and self._settings.tts_enabled:
@@ -187,6 +244,13 @@ class JarvisAssistant:
         return result
 
     def preload_models(self) -> None:
-        """Preload STT and TTS models in background."""
-        threading.Thread(target=self._stt.preload, daemon=True).start()
-        threading.Thread(target=self._tts.preload, daemon=True).start()
+        """Preload STT/TTS and warm LLM providers in background (non-blocking)."""
+        threading.Thread(target=self._stt.preload, daemon=True, name="preload-stt").start()
+        threading.Thread(target=self._tts.preload, daemon=True, name="preload-tts").start()
+        threading.Thread(target=self._warmup_providers, daemon=True, name="llm-warmup").start()
+
+    def _warmup_providers(self) -> None:
+        try:
+            self._agent.providers.warmup_all()
+        except Exception as e:
+            logger.warning("Provider warmup thread error: %s", e)

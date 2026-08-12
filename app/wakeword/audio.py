@@ -26,8 +26,9 @@ class AudioCapture:
         self,
         max_duration: float | None = None,
         silence_timeout: float | None = None,
-        silence_threshold: float = 0.01,
+        silence_threshold: float = 0.008,
         on_audio: Callable[[np.ndarray], None] | None = None,
+        on_level: Callable[[float], None] | None = None,
     ) -> np.ndarray:
         settings = get_settings()
         max_dur = max_duration or settings.command_max_duration
@@ -46,7 +47,13 @@ class AudioCapture:
             if status:
                 logger.warning("Audio status: %s", status)
             chunk = indata[:, 0].copy()
-            rms = np.sqrt(np.mean(chunk ** 2))
+            rms = float(np.sqrt(np.mean(chunk ** 2)))
+            # Normalize roughly for UI (speech often ~0.02–0.2)
+            if on_level:
+                try:
+                    on_level(min(1.0, rms * 8.0))
+                except Exception:
+                    pass
             if rms > silence_threshold:
                 speech_started = True
                 silent_chunks = 0
@@ -68,6 +75,12 @@ class AudioCapture:
                 time.sleep(chunk_duration)
                 if speech_started and silent_chunks >= silence_chunks_needed:
                     break
+
+        if on_level:
+            try:
+                on_level(0.0)
+            except Exception:
+                pass
 
         if not frames:
             return np.array([], dtype=np.float32)

@@ -1,42 +1,70 @@
 """System prompts for the JARVIS agent."""
 
-SYSTEM_PROMPT = """You are JARVIS, a local desktop AI assistant. You are concise, intelligent, calm, and helpful.
+SYSTEM_PROMPT = """You are the reasoning engine for Jarvis, a local Windows desktop assistant.
 
-Your job is to understand user commands and select the appropriate tool to execute.
+The user may speak English, Hindi, Punjabi, Hinglish, or mixed code-switching.
+Understand naturally. Preserve app names, paths, URLs, project names, and technical terms.
+Do not unnecessarily translate the user's words.
 
-IMPORTANT RULES:
-1. Always respond with valid JSON only. No markdown, no explanation outside JSON.
-2. Select exactly ONE tool per request, or use "respond" for conversational replies.
-3. Never execute code directly. Only use registered tools.
-4. Map natural language to tools intelligently (e.g., "launch VS Code" = open_application).
-5. For destructive actions, set needs_confirmation to true.
-6. Keep spoken responses brief and professional.
+Your job: select exactly one tool (or respond) for the command.
+Keep spoken "response" to one short sentence in the user's style.
+Never invent tools. Never claim an action succeeded unless a tool ran.
+Never emit shell code. Prefer structured tool calls when available.
 
-Response format:
-{
-  "action": "<tool_name or 'respond'>",
-  "arguments": { ... tool parameters ... },
-  "response": "<what to say to the user>",
-  "needs_confirmation": false
-}
+If using JSON (no native tool call), return ONLY:
+{"action":"<tool|respond>","arguments":{},"response":"<short>","needs_confirmation":false}
+"""
 
-Available tools will be provided in the user message."""
+TOOL_SELECTION_TEMPLATE = """Command: {command}
 
-TOOL_SELECTION_TEMPLATE = """User command: {command}
-
-Recent conversation:
+Context (recent, limited):
 {context}
+
+Memories (limited):
+{memories}
 
 Available tools:
 {tools}
 
-Stored memories:
-{memories}
-
-Analyze the command and respond with JSON selecting the appropriate tool."""
+Select one tool or respond. Be concise."""
 
 CONFIRMATION_PROMPT = """The user was asked to confirm this action: {action_description}
 User response: {user_response}
 
 Did the user confirm? Respond with JSON:
 {{"confirmed": true/false, "response": "<what to say>"}}"""
+
+# Keyword → tool names used for prompt filtering
+TOOL_FILTER_KEYWORDS: dict[str, list[str]] = {
+    "open_application": ["open", "launch", "start", "close", "app", "chrome", "vscode", "spotify", "discord", "notepad", "calculator", "explorer", "terminal", "edge", "firefox", "kholo", "chala", "khol"],
+    "close_application": ["close", "quit", "exit", "kill", "band"],
+    "open_project": ["project", "unievent", "repo", "repository", "workspace"],
+    "open_url": ["url", "website", "http", "www", "site"],
+    "google_search": ["google", "search google", "search for"],
+    "youtube_search": ["youtube", "yt"],
+    "open_youtube": ["youtube"],
+    "web_search": ["search", "google", "web", "internet", "weather"],
+    "create_folder": ["folder", "directory", "mkdir", "create folder"],
+    "create_file": ["create file", "write file", "new file", "notes.txt"],
+    "read_file": ["read file", "open file", "show file"],
+    "list_directory": ["list", "show files", "downloads", "desktop", "documents"],
+    "delete_path": ["delete", "remove", "erase"],
+    "rename_path": ["rename"],
+    "move_path": ["move"],
+    "copy_path": ["copy"],
+    "open_folder": ["open folder", "open directory"],
+    "run_terminal_command": ["npm", "git", "python", "terminal", "command", "shell", "gradle", "build"],
+    "git_status": ["git status", "git"],
+    "start_project": ["start backend", "npm run", "start project", "dev server"],
+    "volume_control": ["volume", "mute", "unmute", "awaz"],
+    "lock_computer": ["lock"],
+    "system_power": ["shutdown", "restart", "reboot", "sleep"],
+    "get_time": ["time", "clock", "date"],
+    "get_system_info": ["cpu", "ram", "memory", "disk", "battery", "system"],
+    "take_screenshot": ["screenshot", "capture screen"],
+    "media_control": ["play", "pause", "music", "song", "track", "next", "previous", "gaana"],
+    "remember": ["remember", "yaad"],
+    "forget": ["forget"],
+    "recall": ["what do you remember", "recall"],
+    "stop": ["stop talking", "be quiet", "shut up"],
+}

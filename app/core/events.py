@@ -20,6 +20,8 @@ class EventType(Enum):
     ERROR = auto()
     DEBUG = auto()
     STATUS_TEXT = auto()
+    AUDIO_LEVEL = auto()
+    RESPONSE = auto()
 
 
 @dataclass

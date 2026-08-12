@@ -1,0 +1,287 @@
+{
+  "commands": [
+    {
+      "name": "open_chrome",
+      "phrases": [
+        "open chrome", "launch chrome", "start chrome", "chrome kholo",
+        "chrome khol do", "chrome open karo", "chrome khol de", "chrome chala de",
+        "open google chrome", "start google chrome"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "chrome" },
+      "response": "Opening Chrome."
+    },
+    {
+      "name": "open_edge",
+      "phrases": [
+        "open edge", "launch edge", "start edge", "open microsoft edge",
+        "edge kholo", "edge open karo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "edge" },
+      "response": "Opening Edge."
+    },
+    {
+      "name": "open_firefox",
+      "phrases": [
+        "open firefox", "launch firefox", "start firefox", "firefox kholo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "firefox" },
+      "response": "Opening Firefox."
+    },
+    {
+      "name": "open_vscode",
+      "phrases": [
+        "open vscode", "open vs code", "open visual studio code", "launch vscode",
+        "start vscode", "start vs code", "vscode kholo", "vs code kholo",
+        "vscode open karo", "code kholo", "open code",
+        "mera vs code open kar", "mera vscode open kar", "vs code open kar"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "vscode" },
+      "response": "Opening VS Code."
+    },
+    {
+      "name": "open_spotify",
+      "phrases": [
+        "open spotify", "launch spotify", "start spotify", "spotify kholo",
+        "spotify chala de", "spotify open karo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "spotify" },
+      "response": "Opening Spotify."
+    },
+    {
+      "name": "open_discord",
+      "phrases": [
+        "open discord", "launch discord", "start discord", "discord kholo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "discord" },
+      "response": "Opening Discord."
+    },
+    {
+      "name": "open_notepad",
+      "phrases": [
+        "open notepad", "launch notepad", "start notepad", "notepad kholo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "notepad" },
+      "response": "Opening Notepad."
+    },
+    {
+      "name": "open_calculator",
+      "phrases": [
+        "open calculator", "launch calculator", "start calculator",
+        "open calc", "calculator kholo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "calculator" },
+      "response": "Opening Calculator."
+    },
+    {
+      "name": "open_explorer",
+      "phrases": [
+        "open file explorer", "open explorer", "open files", "launch explorer",
+        "file explorer kholo", "explorer kholo"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "explorer" },
+      "response": "Opening File Explorer."
+    },
+    {
+      "name": "open_terminal",
+      "phrases": [
+        "open terminal", "open windows terminal", "launch terminal",
+        "terminal kholo", "open cmd", "open powershell"
+      ],
+      "action": "open_application",
+      "arguments": { "application": "terminal" },
+      "response": "Opening Terminal."
+    },
+    {
+      "name": "volume_up",
+      "phrases": [
+        "volume up", "increase volume", "turn volume up", "raise volume",
+        "volume badhao", "awaz badhao", "sound badhao"
+      ],
+      "action": "volume_control",
+      "arguments": { "action": "up" },
+      "response": "Volume increased."
+    },
+    {
+      "name": "volume_down",
+      "phrases": [
+        "volume down", "decrease volume", "turn volume down", "lower volume",
+        "volume kam karo", "awaz kam karo", "sound kam karo"
+      ],
+      "action": "volume_control",
+      "arguments": { "action": "down" },
+      "response": "Volume decreased."
+    },
+    {
+      "name": "mute",
+      "phrases": [
+        "mute", "mute volume", "mute sound", "silence", "awaz band karo", "mute karo"
+      ],
+      "action": "volume_control",
+      "arguments": { "action": "mute" },
+      "response": "Muted."
+    },
+    {
+      "name": "unmute",
+      "phrases": [
+        "unmute", "unmute volume", "unmute sound", "awaz chalu karo", "unmute karo"
+      ],
+      "action": "volume_control",
+      "arguments": { "action": "unmute" },
+      "response": "Unmuted."
+    },
+    {
+      "name": "lock_pc",
+      "phrases": [
+        "lock my pc", "lock pc", "lock computer", "lock the computer",
+        "lock my computer", "lock screen", "pc lock karo", "computer lock karo"
+      ],
+      "action": "lock_computer",
+      "arguments": {},
+      "response": "Locking the computer."
+    },
+    {
+      "name": "screenshot",
+      "phrases": [
+        "take a screenshot", "take screenshot", "capture screenshot",
+        "screenshot lo", "screenshot le lo", "screen capture"
+      ],
+      "action": "take_screenshot",
+      "arguments": {},
+      "response": "Taking a screenshot."
+    },
+    {
+      "name": "play_music",
+      "phrases": [
+        "play music", "resume music", "play song", "music chalao",
+        "gaana chalao", "play media"
+      ],
+      "action": "media_control",
+      "arguments": { "action": "play" },
+      "response": "Playing."
+    },
+    {
+      "name": "pause_music",
+      "phrases": [
+        "pause music", "pause song", "pause media", "music pause karo",
+        "gaana pause karo"
+      ],
+      "action": "media_control",
+      "arguments": { "action": "pause" },
+      "response": "Paused."
+    },
+    {
+      "name": "stop_music",
+      "phrases": [
+        "stop music", "stop song", "stop media", "music band karo"
+      ],
+      "action": "media_control",
+      "arguments": { "action": "stop" },
+      "response": "Stopped media."
+    },
+    {
+      "name": "next_song",
+      "phrases": [
+        "next song", "next track", "skip song", "aglai gaana", "next gaana"
+      ],
+      "action": "media_control",
+      "arguments": { "action": "next" },
+      "response": "Next track."
+    },
+    {
+      "name": "previous_song",
+      "phrases": [
+        "previous song", "previous track", "last song", "pichla gaana", "prev song"
+      ],
+      "action": "media_control",
+      "arguments": { "action": "previous" },
+      "response": "Previous track."
+    },
+    {
+      "name": "what_time",
+      "phrases": [
+        "what time is it", "what's the time", "current time", "time batao",
+        "kitna time hua", "tell me the time"
+      ],
+      "action": "get_time",
+      "arguments": {},
+      "response": ""
+    },
+    {
+      "name": "cpu_usage",
+      "phrases": [
+        "cpu usage", "what is my cpu usage", "tell me my cpu usage",
+        "cpu batao", "processor usage"
+      ],
+      "action": "get_system_info",
+      "arguments": { "type": "cpu" },
+      "response": ""
+    },
+    {
+      "name": "ram_usage",
+      "phrases": [
+        "ram usage", "what is my ram usage", "tell me my ram usage",
+        "memory usage", "ram batao"
+      ],
+      "action": "get_system_info",
+      "arguments": { "type": "ram" },
+      "response": ""
+    },
+    {
+      "name": "open_youtube",
+      "phrases": [
+        "open youtube", "launch youtube", "youtube kholo", "youtube open karo"
+      ],
+      "action": "open_youtube",
+      "arguments": {},
+      "response": "Opening YouTube."
+    },
+    {
+      "name": "shutdown",
+      "phrases": [
+        "shut down the computer", "shutdown the computer", "shutdown",
+        "shut down", "turn off the computer", "pc band karo", "computer band karo"
+      ],
+      "action": "system_power",
+      "arguments": { "action": "shutdown" },
+      "response": "Shutdown will close your current session. Should I continue?"
+    },
+    {
+      "name": "restart",
+      "phrases": [
+        "restart the computer", "reboot", "restart pc", "reboot the computer",
+        "pc restart karo"
+      ],
+      "action": "system_power",
+      "arguments": { "action": "restart" },
+      "response": "Restart will close your current session. Should I continue?"
+    },
+    {
+      "name": "sleep",
+      "phrases": [
+        "sleep", "put computer to sleep", "sleep the computer", "pc sleep karo"
+      ],
+      "action": "system_power",
+      "arguments": { "action": "sleep" },
+      "response": "This will put the computer to sleep. Should I continue?"
+    },
+    {
+      "name": "open_unievent",
+      "phrases": [
+        "open unievent", "open my unievent project", "unievent kholo",
+        "open unievent project"
+      ],
+      "action": "open_project",
+      "arguments": { "project": "unievent", "editor": "vscode" },
+      "response": "Opening UniEvent."
+    }
+  ]
+}

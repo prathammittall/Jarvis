@@ -16,7 +16,7 @@ def main():
         print("\n>>> WAKE WORD DETECTED! <<<")
 
     detector = create_detector(on_detected=on_detect)
-    print("Listening for wake word... Say 'Hey Jarvis' or 'Jarvis'")
+    print("Listening for wake word... Say 'Jarvis'")
     print("Press Ctrl+C to stop.")
     detector.start()
     try:

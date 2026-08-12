@@ -27,21 +27,61 @@ def run_with_ui(debug: bool = False) -> int:
     tray = JarvisTray(assistant, window, app)
 
     def on_state_change(old, new):
-        window.update_state(new)
+        # Use Qt signals so background threads update the UI safely
+        window.sig_state.emit(new)
         tray.update_status(new)
 
     assistant.set_state_callback(on_state_change)
 
-    def on_status_text(event):
-        window.update_command(event.data.get("text", ""))
+    def on_transcription(event):
+        text = event.data.get("text", "")
+        window.sig_command.emit(text)
 
-    assistant.events.subscribe(EventType.STATUS_TEXT, on_status_text)
-    assistant.events.subscribe(EventType.TRANSCRIPTION, on_status_text)
+    def on_response(event):
+        text = event.data.get("text", "")
+        window.sig_response.emit(text)
+
+    def on_level(event):
+        window.sig_level.emit(float(event.data.get("level", 0.0)))
+
+    def on_tool(event):
+        action = event.data.get("action", "")
+        window.sig_tool.emit(str(action))
+
+    def on_tool_result(event):
+        action = event.data.get("action", "")
+        result = event.data.get("result", {})
+        ok = result.get("success", False)
+        window.sig_activity.emit(
+            f"Tool · {action} · {'ok' if ok else 'failed'}"
+        )
+
+    def on_wake(event):
+        window.sig_activity.emit("Wake word detected")
+        window.sig_response.emit("Yes?")
+
+    def on_speech_started(event):
+        text = event.data.get("text", "")
+        if text:
+            window.sig_response.emit(text)
+        window.sig_activity.emit("Speaking response")
+
+    assistant.events.subscribe(EventType.TRANSCRIPTION, on_transcription)
+    assistant.events.subscribe(EventType.COMMAND_RECEIVED, on_transcription)
+    assistant.events.subscribe(EventType.RESPONSE, on_response)
+    assistant.events.subscribe(EventType.AUDIO_LEVEL, on_level)
+    assistant.events.subscribe(EventType.TOOL_SELECTED, on_tool)
+    assistant.events.subscribe(EventType.TOOL_RESULT, on_tool_result)
+    assistant.events.subscribe(EventType.WAKE_WORD_DETECTED, on_wake)
+    assistant.events.subscribe(EventType.SPEECH_STARTED, on_speech_started)
+
+    # Click-to-talk / orb click — works even if wake word fails
+    window.talk_requested.connect(assistant.activate)
 
     if not settings.ui_start_minimized:
         window.show()
 
-    window.update_state(AssistantState.IDLE)
+    window.sig_state.emit(AssistantState.IDLE)
     assistant.preload_models()
     assistant.start()
 
