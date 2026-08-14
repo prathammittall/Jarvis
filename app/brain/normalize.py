@@ -37,6 +37,9 @@ INTENT_RESTART = "RESTART"
 INTENT_SLEEP = "SLEEP"
 INTENT_LOCK_PC = "LOCK_PC"
 INTENT_GET_TIME = "GET_TIME"
+INTENT_OPEN_FOLDER = "OPEN_FOLDER"
+INTENT_OPEN_WHATSAPP = "OPEN_WHATSAPP"
+INTENT_SEND_WHATSAPP = "SEND_WHATSAPP"
 INTENT_UNKNOWN = "UNKNOWN"
 
 # App / site aliases (latin + common misspellings + Devanagari)
@@ -75,6 +78,21 @@ WEBSITE_ALIASES: dict[str, str] = {
     "यू ट्यूब": "youtube",
     "google": "google",
     "गूगल": "google",
+    "github": "github",
+    "git hub": "github",
+    "git": "github",
+    "whatsapp": "whatsapp",
+    "whats app": "whatsapp",
+    "whatsapp web": "whatsapp",
+    "व्हाट्सएप": "whatsapp",
+}
+
+FOLDER_ALIASES: dict[str, str] = {
+    "downloads": "downloads",
+    "download": "downloads",
+    "documents": "documents",
+    "docs": "documents",
+    "desktop": "desktop",
 }
 
 # Verb phrase → English canonical fragment (longest first matching)
@@ -263,6 +281,18 @@ def _tool_create_folder(p: ParsedIntent) -> dict[str, Any]:
     return {"path": path}
 
 
+def _tool_open_folder(p: ParsedIntent) -> dict[str, Any]:
+    return {"path": p.target or p.parameters.get("path", "")}
+
+
+def _tool_whatsapp_send(p: ParsedIntent) -> dict[str, Any]:
+    return {
+        "contact": p.target or p.parameters.get("contact", ""),
+        "message": p.parameters.get("message", ""),
+        "phone": p.parameters.get("phone", ""),
+    }
+
+
 _INTENT_TOOL_MAP: dict[str, tuple[str, Any]] = {
     INTENT_OPEN_APP: ("open_application", _tool_open_app),
     INTENT_CLOSE_APP: ("close_application", _tool_close_app),
@@ -284,6 +314,9 @@ _INTENT_TOOL_MAP: dict[str, tuple[str, Any]] = {
     INTENT_SLEEP: ("system_power", _tool_power("sleep")),
     INTENT_LOCK_PC: ("lock_computer", _tool_empty),
     INTENT_GET_TIME: ("get_time", _tool_empty),
+    INTENT_OPEN_FOLDER: ("open_folder", _tool_open_folder),
+    INTENT_OPEN_WHATSAPP: ("open_whatsapp", _tool_empty),
+    INTENT_SEND_WHATSAPP: ("send_whatsapp_message", _tool_whatsapp_send),
 }
 
 
@@ -328,6 +361,19 @@ def _resolve_app(name: str) -> str | None:
     return cleaned if cleaned else None
 
 
+def _resolve_folder(name: str) -> str | None:
+    n = name.lower().strip()
+    n = re.sub(r"^my\s+", "", n)
+    n = re.sub(r"\s+folder$", "", n)
+    if n in FOLDER_ALIASES:
+        return FOLDER_ALIASES[n]
+    try:
+        from app.tools.app_catalog import folder_key
+        return folder_key(n)
+    except Exception:
+        return None
+
+
 def _resolve_site(name: str) -> str | None:
     n = name.lower().strip()
     if n in WEBSITE_ALIASES:
@@ -335,12 +381,138 @@ def _resolve_site(name: str) -> str | None:
     for alias, canonical in WEBSITE_ALIASES.items():
         if alias in n:
             return canonical
+    try:
+        from app.tools.app_catalog import website_url
+        if website_url(n):
+            return n
+    except Exception:
+        pass
     return None
 
 
 def _clean_target(text: str) -> str:
     parts = [p for p in text.lower().split() if p not in _FILLER]
     return " ".join(parts).strip()
+
+
+_WA_TOKEN = r"(?:whatsapp|whats\s*app|व्हाट्सएप)"
+
+
+def _match_whatsapp(t: str, language: Language, raw: str) -> ParsedIntent | None:
+    """Open WhatsApp Web or send a message to a named contact."""
+    if not re.search(_WA_TOKEN, t, re.I):
+        return None
+
+    send_patterns = [
+        re.compile(
+            r"send\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?to\s+"
+            r"(?P<contact>.+?)\s+(?:on\s+whatsapp\s+)?(?:saying|that|says|:)\s+(?P<msg>.+)$",
+            re.I,
+        ),
+        re.compile(
+            r"send\s+(?:a\s+)?message\s+to\s+(?P<contact>.+?)\s+on\s+whatsapp"
+            r"(?:\s+(?:saying|that|:)\s+(?P<msg>.+))?$",
+            re.I,
+        ),
+        re.compile(
+            r"message\s+(?P<contact>.+?)\s+on\s+whatsapp"
+            r"(?:\s+(?:saying|that|:)\s+(?P<msg>.+))?$",
+            re.I,
+        ),
+        re.compile(
+            r"whatsapp\s+(?P<contact>.+?)\s+(?:saying|that|says|:)\s+(?P<msg>.+)$",
+            re.I,
+        ),
+        re.compile(
+            r"send\s+(?P<msg>.+?)\s+to\s+(?P<contact>.+?)\s+(?:on|via|using)\s+whatsapp\s*$",
+            re.I,
+        ),
+        re.compile(
+            r"(?:whatsapp|message)\s+(?:pe\s+)?(?P<contact>.+?)\s+ko\s+"
+            r"(?:message\s+)?(?:bhejo|bhej\s+do|karo)\s+(?P<msg>.+)$",
+            re.I,
+        ),
+        re.compile(
+            r"(?P<contact>.+?)\s+ko\s+whatsapp\s+(?:pe\s+)?(?:message\s+)?"
+            r"(?:bhejo|bhej\s+do|karo)\s+(?P<msg>.+)$",
+            re.I,
+        ),
+        re.compile(
+            r"whatsapp\s+(?:pe\s+)?(?:message\s+)?(?:bhejo|karo)\s+"
+            r"(?P<contact>.+?)\s+(?:ko\s+)?(?P<msg>.+)$",
+            re.I,
+        ),
+    ]
+    for pat in send_patterns:
+        m = pat.search(t)
+        if not m:
+            continue
+        contact = _clean_whatsapp_contact(m.group("contact"))
+        msg = (m.groupdict().get("msg") or "").strip()
+        msg = re.sub(r"^(saying|that|says|:)\s+", "", msg, flags=re.I).strip()
+        if contact:
+            return ParsedIntent(
+                INTENT_SEND_WHATSAPP,
+                target=contact,
+                parameters={"contact": contact, "message": msg},
+                language=language,
+                normalized=t,
+                confidence=0.95,
+                raw=raw,
+            )
+
+    chat_only = re.search(
+        r"(?:open\s+)?(?:whatsapp\s+)?chat\s+with\s+(?P<contact>.+)$",
+        t,
+        re.I,
+    )
+    if chat_only:
+        contact = _clean_whatsapp_contact(chat_only.group("contact"))
+        if contact:
+            return ParsedIntent(
+                INTENT_SEND_WHATSAPP,
+                target=contact,
+                parameters={"contact": contact, "message": ""},
+                language=language,
+                normalized=t,
+                confidence=0.9,
+                raw=raw,
+            )
+
+    # "whatsapp mom" with no saying-clause — open that chat
+    bare = re.match(rf"^{_WA_TOKEN}\s+(?P<contact>.+)$", t, re.I)
+    if bare:
+        contact = _clean_whatsapp_contact(bare.group("contact"))
+        skip = {"web", "app", "please", "kholo", "open", "launch", "start"}
+        if contact and contact not in skip and not re.search(
+            r"\b(open|launch|start|kholo)\b", t, re.I
+        ):
+            return ParsedIntent(
+                INTENT_SEND_WHATSAPP,
+                target=contact,
+                parameters={"contact": contact, "message": ""},
+                language=language,
+                normalized=t,
+                confidence=0.88,
+                raw=raw,
+            )
+
+    return ParsedIntent(
+        INTENT_OPEN_WHATSAPP,
+        target="whatsapp",
+        language=language,
+        normalized=t,
+        confidence=0.95,
+        raw=raw,
+    )
+
+
+def _clean_whatsapp_contact(name: str) -> str:
+    n = (name or "").strip()
+    n = re.sub(_WA_TOKEN, " ", n, flags=re.I)
+    n = re.sub(r"\b(on|via|using|please|ko|pe|par|a|the|chat|message|web)\b", " ", n, flags=re.I)
+    n = re.sub(r"\s+", " ", n).strip(" .,-")
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +523,10 @@ def _match_patterns(text: str, language: Language) -> ParsedIntent | None:
     t = text.strip()
     if not t:
         return None
+
+    wa = _match_whatsapp(t, language, text)
+    if wa is not None:
+        return wa
 
     # --- Volume ---
     if re.search(r"\b(volume|awaz|aawaaz|sound|आवाज|आवाज़|वॉल्यूम)\b", t, re.I) or re.search(
@@ -494,6 +670,12 @@ def _match_patterns(text: str, language: Language) -> ParsedIntent | None:
     m = re.match(r"^(?:open|launch|start)\s+(.+)$", t, re.I)
     if m:
         target_raw = _clean_target(m.group(1))
+        folder = _resolve_folder(target_raw)
+        if folder:
+            return ParsedIntent(
+                INTENT_OPEN_FOLDER, target=folder, parameters={"path": folder},
+                language=language, normalized=t, confidence=0.95, raw=text,
+            )
         site = _resolve_site(target_raw)
         if site:
             return ParsedIntent(
@@ -571,6 +753,15 @@ def intent_to_tool_call(parsed: ParsedIntent) -> tuple[str, dict[str, Any]] | No
         site = (parsed.target or "").lower()
         if site == "youtube":
             return "open_youtube", {}
+        if site == "whatsapp":
+            return "open_whatsapp", {}
+        try:
+            from app.tools.app_catalog import website_url
+            url = website_url(site)
+            if url:
+                return "open_url", {"url": url}
+        except Exception:
+            pass
         if site == "google":
             return "open_url", {"url": "https://www.google.com"}
         return "open_url", {"url": f"https://{site}.com"}

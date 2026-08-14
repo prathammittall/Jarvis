@@ -17,6 +17,10 @@ class AssistantState(Enum):
     AWAITING_CONFIRMATION = auto()
     ERROR = auto()
     STOPPED = auto()
+    # User-facing aliases (same members, clearer names)
+    LISTENING_FOR_WAKEWORD = LISTENING_FOR_WAKE_WORD
+    AWAKE = WAKE_WORD_DETECTED
+    PROCESSING = THINKING
 
 
 STATE_LABELS = {

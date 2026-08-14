@@ -1,4 +1,4 @@
-"""xAI Grok API provider (OpenAI-compatible chat completions)."""
+"""Google Gemini API provider (OpenAI-compatible chat completions)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from app.brain.providers.base import ChatResult, LLMError, LLMProvider
 from app.config import get_settings
 from app.core.logger import get_logger
 
-logger = get_logger("provider.grok")
+logger = get_logger("provider.gemini")
+
+DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 
 def _tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -20,7 +23,6 @@ def _tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for t in tools:
         params = t.get("parameters") or {}
-        # Ensure JSON-schema object shape
         if "type" not in params:
             properties = {}
             required = []
@@ -38,7 +40,6 @@ def _tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "parameters": params,
             },
         })
-    # Always allow a spoken-only respond function
     out.append({
         "type": "function",
         "function": {
@@ -56,17 +57,18 @@ def _tools_to_openai(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-class GrokProvider(LLMProvider):
-    name = "grok"
+class GeminiProvider(LLMProvider):
+    name = "gemini"
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._api_key = (settings.grok_api_key or "").strip()
-        self._base_url = (settings.grok_base_url or "https://api.x.ai/v1").rstrip("/")
-        self._model = settings.grok_model or "grok-3-mini"
-        self._timeout = float(settings.grok_timeout)
-        self._enabled = bool(settings.grok_enabled)
+        self._api_key = (settings.gemini_api_key or "").strip()
+        self._base_url = (settings.gemini_base_url or DEFAULT_BASE_URL).rstrip("/")
+        self._model = settings.gemini_model or DEFAULT_MODEL
+        self._timeout = float(settings.gemini_timeout)
+        self._enabled = bool(settings.gemini_enabled)
         self._available: bool | None = None
+        self._hard_fail = False
         self._session = requests.Session()
 
     def is_available(self) -> bool:
@@ -74,14 +76,15 @@ class GrokProvider(LLMProvider):
             return False
         if not self._api_key:
             return False
-        if self._available is False:
+        if self._hard_fail:
             return False
         return True
 
     def mark_unavailable(self) -> None:
-        self._available = False
+        self._hard_fail = True
 
     def mark_available(self) -> None:
+        self._hard_fail = False
         self._available = True
 
     def health_check(self) -> dict[str, Any]:
@@ -94,11 +97,11 @@ class GrokProvider(LLMProvider):
             "error": None,
         }
         if not self._enabled:
-            result["error"] = "Grok disabled"
+            result["error"] = "Gemini disabled"
             self._available = False
             return result
         if not self._api_key:
-            result["error"] = "GROK_API_KEY not set"
+            result["error"] = "GEMINI_API_KEY not set"
             self._available = False
             return result
         try:
@@ -109,9 +112,12 @@ class GrokProvider(LLMProvider):
             )
             if r.status_code == 200:
                 self._available = True
+                self._hard_fail = False
                 result["available"] = True
             else:
                 self._available = False
+                if r.status_code in (401, 403):
+                    self._hard_fail = True
                 result["error"] = f"HTTP {r.status_code}"
         except requests.RequestException as e:
             self._available = False
@@ -133,7 +139,7 @@ class GrokProvider(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
     ) -> ChatResult:
         if not self.is_available():
-            raise LLMError("Grok is not available (disabled, missing key, or marked offline).")
+            raise LLMError("Gemini is not available (disabled, missing key, or marked offline).")
 
         payload: dict[str, Any] = {
             "model": self._model,
@@ -158,10 +164,9 @@ class GrokProvider(LLMProvider):
             )
             elapsed = time.perf_counter() - start
             if r.status_code >= 400:
-                # Network/auth failures mark unavailable for this session soft-state
-                if r.status_code in (401, 403, 429) or r.status_code >= 500:
-                    self._available = False
-                raise LLMError(f"Grok HTTP {r.status_code}: {r.text[:200]}")
+                if r.status_code in (401, 403):
+                    self._hard_fail = True
+                raise LLMError(f"Gemini HTTP {r.status_code}: {r.text[:200]}")
 
             data = r.json()
             choice = (data.get("choices") or [{}])[0]
@@ -184,7 +189,7 @@ class GrokProvider(LLMProvider):
             usage = data.get("usage") or {}
             self._available = True
             logger.info(
-                "Grok: model=%s elapsed=%.2fs tools=%s usage=%s",
+                "Gemini: model=%s elapsed=%.2fs tools=%s usage=%s",
                 self._model,
                 elapsed,
                 tool_name or "none",
@@ -202,21 +207,19 @@ class GrokProvider(LLMProvider):
             )
         except requests.Timeout as e:
             elapsed = time.perf_counter() - start
-            logger.warning("Grok request failed after %.2fs (timeout)", elapsed)
-            self._available = False
-            raise LLMError(f"Grok timed out after {self._timeout}s") from e
+            logger.warning("Gemini request failed after %.2fs (timeout)", elapsed)
+            raise LLMError(f"Gemini timed out after {self._timeout}s") from e
         except requests.RequestException as e:
             elapsed = time.perf_counter() - start
-            logger.warning("Grok request failed after %.2fs: %s", elapsed, e)
-            self._available = False
-            raise LLMError(f"Grok request failed: {e}") from e
+            logger.warning("Gemini request failed after %.2fs: %s", elapsed, e)
+            raise LLMError(f"Gemini request failed: {e}") from e
 
     def warmup(self) -> dict[str, Any]:
         start = time.perf_counter()
         health = self.health_check()
         health["elapsed"] = time.perf_counter() - start
         if health.get("available"):
-            logger.info("Grok health check OK (model=%s, %.2fs)", self._model, health["elapsed"])
+            logger.info("Gemini health check OK (model=%s, %.2fs)", self._model, health["elapsed"])
         else:
-            logger.info("Grok unavailable: %s", health.get("error"))
+            logger.info("Gemini unavailable: %s", health.get("error"))
         return health

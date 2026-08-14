@@ -20,20 +20,29 @@ def setup_logging(log_file: Path | None = None, debug: bool = False) -> logging.
     root.setLevel(level)
     root.handlers.clear()
 
-    fmt = logging.Formatter(
+    file_fmt = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    console_fmt = logging.Formatter(
+        "[%(asctime)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
-    file_handler.setFormatter(fmt)
+    file_handler.setFormatter(file_fmt)
     file_handler.setLevel(level)
     root.addHandler(file_handler)
 
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(fmt)
-    console_handler.setLevel(level)
-    root.addHandler(console_handler)
+    # pythonw has no stdout — skip console handler when detached
+    if sys.stdout is not None:
+        try:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(console_fmt)
+            console_handler.setLevel(level)
+            root.addHandler(console_handler)
+        except Exception:
+            pass
 
     return root
 

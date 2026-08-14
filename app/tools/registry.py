@@ -83,10 +83,10 @@ def get_registry() -> ToolRegistry:
 def _register_all(registry: ToolRegistry) -> None:
     from app.tools import (
         applications, browser, filesystem, media,
-        memory_tools, system_info, terminal, web, windows_tools,
+        memory_tools, system_info, terminal, web, windows_tools, whatsapp,
     )
     for module in (
         applications, browser, filesystem, media,
-        memory_tools, system_info, terminal, web, windows_tools,
+        memory_tools, system_info, terminal, web, windows_tools, whatsapp,
     ):
         module.register(registry)

@@ -1,0 +1,5 @@
+{
+  "_comment": "Map spoken names to WhatsApp numbers with country code, no plus sign. Example: \"mom\": \"9198XXXXXXXX\". Keys starting with _ are ignored.",
+  "mom": "919915554066",
+  "dad": "919815073266"
+}

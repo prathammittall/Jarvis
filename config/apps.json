@@ -1,0 +1,85 @@
+{
+  "apps": {
+    "chrome": {
+      "aliases": ["chrome", "google chrome", "browser"],
+      "exe": ["chrome.exe"],
+      "display": "Chrome",
+      "close_exe": "chrome.exe",
+      "confirm_close": false
+    },
+    "edge": {
+      "aliases": ["edge", "microsoft edge"],
+      "exe": ["msedge.exe"],
+      "display": "Edge",
+      "close_exe": "msedge.exe",
+      "confirm_close": false
+    },
+    "firefox": {
+      "aliases": ["firefox"],
+      "exe": ["firefox.exe"],
+      "display": "Firefox",
+      "close_exe": "firefox.exe",
+      "confirm_close": false
+    },
+    "vscode": {
+      "aliases": ["vscode", "vs code", "visual studio code", "code"],
+      "exe": ["Code.exe", "code"],
+      "display": "VS Code",
+      "close_exe": "Code.exe",
+      "confirm_close": false
+    },
+    "spotify": {
+      "aliases": ["spotify"],
+      "exe": ["Spotify.exe"],
+      "display": "Spotify",
+      "close_exe": "Spotify.exe",
+      "confirm_close": false
+    },
+    "discord": {
+      "aliases": ["discord"],
+      "exe": ["Discord.exe"],
+      "display": "Discord",
+      "close_exe": "Discord.exe",
+      "confirm_close": false
+    },
+    "notepad": {
+      "aliases": ["notepad"],
+      "exe": ["notepad.exe"],
+      "display": "Notepad",
+      "close_exe": "notepad.exe",
+      "confirm_close": false
+    },
+    "calculator": {
+      "aliases": ["calculator", "calc"],
+      "exe": ["calc.exe"],
+      "display": "Calculator",
+      "close_exe": "CalculatorApp.exe",
+      "confirm_close": false
+    },
+    "explorer": {
+      "aliases": ["explorer", "file explorer", "files"],
+      "exe": ["explorer.exe"],
+      "display": "File Explorer",
+      "close_exe": "explorer.exe",
+      "confirm_close": true
+    },
+    "terminal": {
+      "aliases": ["terminal", "windows terminal", "cmd", "command prompt", "powershell"],
+      "exe": ["wt.exe", "WindowsTerminal.exe", "cmd.exe", "powershell.exe"],
+      "display": "Terminal",
+      "close_exe": "WindowsTerminal.exe",
+      "confirm_close": false
+    }
+  },
+  "websites": {
+    "google": "https://www.google.com",
+    "youtube": "https://www.youtube.com",
+    "github": "https://github.com",
+    "whatsapp": "https://web.whatsapp.com"
+  },
+  "folders": {
+    "downloads": "downloads",
+    "documents": "documents",
+    "desktop": "desktop"
+  }
+}

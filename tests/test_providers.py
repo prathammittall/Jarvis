@@ -1,4 +1,4 @@
-"""Tests for Grok / Ollama provider chain and routing."""
+"""Tests for Gemini / Ollama provider chain and routing."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 
 from app.brain.fast_commands import FastCommandRouter
 from app.brain.providers.base import ChatResult, LLMError
-from app.brain.providers.grok import GrokProvider
+from app.brain.providers.gemini import GeminiProvider
 from app.brain.providers import ProviderChain
 
 
@@ -32,9 +32,7 @@ class TestFastStillLocal:
     )
     def test_multilingual_fast(self, phrase):
         router = FastCommandRouter()
-        # "mera vs code open kar" may not be exact — normalize fuzzy
         matched = router.match(phrase)
-        # Ensure at least the core phrases match; hinglish variants in commands.json
         if phrase in ("chrome kholo", "chrome khol de", "volume up", "mute", "open vscode"):
             assert matched is not None
 
@@ -57,39 +55,47 @@ class TestFastStillLocal:
 
 
 class TestProviderPriority:
-    def test_grok_primary_when_available(self):
+    def test_gemini_primary_when_available(self):
         chain = ProviderChain()
-        chain.grok._enabled = True
-        chain.grok._api_key = "test-key"
-        chain.grok._available = True
+        chain.gemini._enabled = True
+        chain.gemini._api_key = "test-key"
+        chain.gemini._available = True
 
-        grok_result = ChatResult(content='{"action":"respond","arguments":{},"response":"Hi","needs_confirmation":false}', provider="grok", elapsed=0.1)
-        with patch.object(chain.grok, "chat", return_value=grok_result) as mock_grok, \
+        gemini_result = ChatResult(
+            content='{"action":"respond","arguments":{},"response":"Hi","needs_confirmation":false}',
+            provider="gemini",
+            elapsed=0.1,
+        )
+        with patch.object(chain.gemini, "chat", return_value=gemini_result) as mock_gemini, \
              patch.object(chain.ollama, "is_available", return_value=True), \
              patch.object(chain.ollama, "chat") as mock_ollama:
             out = chain.chat([{"role": "user", "content": "hi"}], format_json=True)
-            assert out.provider == "grok"
-            mock_grok.assert_called_once()
+            assert out.provider == "gemini"
+            mock_gemini.assert_called_once()
             mock_ollama.assert_not_called()
 
-    def test_fallback_to_ollama_on_grok_failure(self):
+    def test_fallback_to_ollama_on_gemini_failure(self):
         chain = ProviderChain()
-        chain.grok._enabled = True
-        chain.grok._api_key = "test-key"
-        chain.grok._available = True
+        chain.gemini._enabled = True
+        chain.gemini._api_key = "test-key"
+        chain.gemini._available = True
 
-        ollama_result = ChatResult(content='{"action":"respond","arguments":{},"response":"Ok","needs_confirmation":false}', provider="ollama", elapsed=0.2)
-        with patch.object(chain.grok, "chat", side_effect=LLMError("timeout")), \
+        ollama_result = ChatResult(
+            content='{"action":"respond","arguments":{},"response":"Ok","needs_confirmation":false}',
+            provider="ollama",
+            elapsed=0.2,
+        )
+        with patch.object(chain.gemini, "chat", side_effect=LLMError("timeout")), \
              patch.object(chain.ollama, "is_available", return_value=True), \
              patch.object(chain.ollama, "chat", return_value=ollama_result) as mock_ollama:
             out = chain.chat([{"role": "user", "content": "hi"}], format_json=True)
             assert out.provider == "ollama"
             mock_ollama.assert_called_once()
 
-    def test_grok_disabled_uses_ollama(self):
+    def test_gemini_disabled_uses_ollama(self):
         chain = ProviderChain()
-        chain.grok._enabled = False
-        chain.grok._api_key = ""
+        chain.gemini._enabled = False
+        chain.gemini._api_key = ""
         ollama_result = ChatResult(content="{}", provider="ollama", elapsed=0.1)
         with patch.object(chain.ollama, "is_available", return_value=True), \
              patch.object(chain.ollama, "chat", return_value=ollama_result):
@@ -97,17 +103,17 @@ class TestProviderPriority:
             assert out.provider == "ollama"
 
 
-class TestGrokConfig:
+class TestGeminiConfig:
     def test_unavailable_without_key(self):
-        with patch("app.brain.providers.grok.get_settings") as gs:
+        with patch("app.brain.providers.gemini.get_settings") as gs:
             settings = MagicMock()
-            settings.grok_enabled = True
-            settings.grok_api_key = ""
-            settings.grok_base_url = "https://api.x.ai/v1"
-            settings.grok_model = "grok-3-mini"
-            settings.grok_timeout = 10.0
+            settings.gemini_enabled = True
+            settings.gemini_api_key = ""
+            settings.gemini_base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            settings.gemini_model = "gemini-2.0-flash"
+            settings.gemini_timeout = 10.0
             gs.return_value = settings
-            p = GrokProvider()
+            p = GeminiProvider()
             assert p.is_available() is False
 
 

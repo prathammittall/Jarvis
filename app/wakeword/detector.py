@@ -18,6 +18,23 @@ logger = get_logger("wakeword")
 _model = None
 _model_lock = threading.Lock()
 
+_JARVIS_FUZZY = ("jarvis", "jarviss", "jarves", "jarvus", "jervis", "gervis")
+
+
+def text_matches_wake(text: str, wake_word: str = "jarvis") -> bool:
+    """True if transcribed text contains the configured wake word (local only)."""
+    if not text:
+        return False
+    cleaned = "".join(c if c.isalnum() or c.isspace() else " " for c in text.lower())
+    cleaned = " ".join(cleaned.split())
+    word = (wake_word or "jarvis").strip().lower()
+    keywords = {word, f"hey {word}", f"ok {word}", f"hi {word}", f"yo {word}"}
+    if any(kw in cleaned for kw in keywords):
+        return True
+    tokens = cleaned.split()
+    fuzzy = _JARVIS_FUZZY if word == "jarvis" else (word,)
+    return any(any(f in tok for f in fuzzy) for tok in tokens)
+
 
 def _ensure_openwakeword_models() -> Path:
     """Ensure ONNX feature + wake-word models exist; download if needed."""
@@ -87,6 +104,31 @@ class WakeWordDetector:
         self._stream: sd.InputStream | None = None
         self._stream_lock = threading.Lock()
 
+    def _confirm_wake_text(self, audio: np.ndarray, wake_word: str) -> bool:
+        """Optional local STT confirm in the openWakeWord gray zone. Never calls an API."""
+        try:
+            from app.speech import stt as stt_mod
+            model = stt_mod._model
+            if model is None:
+                return False
+            if audio.dtype != np.float32:
+                audio = audio.astype(np.float32)
+            segments, _ = model.transcribe(
+                audio,
+                language="en",
+                beam_size=1,
+                vad_filter=False,
+                condition_on_previous_text=False,
+                without_timestamps=True,
+            )
+            text = " ".join(seg.text.strip() for seg in segments).strip().lower()
+            if text:
+                logger.debug("Wake confirm heard: %r", text)
+            return text_matches_wake(text, wake_word)
+        except Exception as e:
+            logger.debug("Wake confirm skipped: %s", e)
+            return False
+
     @property
     def enabled(self) -> bool:
         return self._enabled
@@ -148,9 +190,16 @@ class WakeWordDetector:
 
         last_fire = 0.0
         last_score_log = 0.0
+        last_confirm = 0.0
         max_recent = 0.0
+        ring_samples = int(sample_rate * 1.6)
+        ring = np.zeros(ring_samples, dtype=np.float32)
+        ring_pos = 0
+        gray = max(0.12, threshold * 0.4)
+        wake_word = (settings.wake_word or "jarvis").strip().lower()
         logger.info(
-            "Wake word ready — say 'Hey Jarvis' (threshold=%.2f, mic=%s)",
+            "Wake-word listener started — say '%s' (threshold=%.2f, mic=%s)",
+            wake_word.title(),
             threshold,
             settings.microphone_index,
         )
@@ -166,13 +215,28 @@ class WakeWordDetector:
             max_recent = 0.0
 
             def audio_callback(indata, frames, time_info, status):
-                nonlocal last_fire, max_recent
+                nonlocal last_fire, max_recent, ring_pos
                 if self._paused.is_set() or not self._enabled or not self._running:
                     return
                 if status:
                     logger.warning("Wake word audio status: %s", status)
 
-                pcm = (indata[:, 0] * 32767).astype(np.int16)
+                chunk = indata[:, 0]
+                n = len(chunk)
+                if n >= ring_samples:
+                    ring[:] = chunk[-ring_samples:]
+                    ring_pos = 0
+                else:
+                    end = ring_pos + n
+                    if end <= ring_samples:
+                        ring[ring_pos:end] = chunk
+                    else:
+                        first = ring_samples - ring_pos
+                        ring[ring_pos:] = chunk[:first]
+                        ring[: n - first] = chunk[first:]
+                    ring_pos = (ring_pos + n) % ring_samples
+
+                pcm = (chunk * 32767).astype(np.int16)
                 prediction = model.predict(pcm)
                 for mdl_name, score in prediction.items():
                     if score >= 0.05:
@@ -181,7 +245,7 @@ class WakeWordDetector:
                         max_recent = float(score)
                     if score >= threshold and (time.time() - last_fire) > 1.5:
                         last_fire = time.time()
-                        logger.info("Wake word detected: %s (score=%.2f)", mdl_name, score)
+                        logger.info("Wake word detected (%s score=%.2f)", mdl_name, score)
                         try:
                             model.reset()
                         except Exception:
@@ -209,11 +273,28 @@ class WakeWordDetector:
                             self._on_detected()
                         break
                     now = time.time()
+                    # Gray-zone: openWakeWord heard something like Jarvis — confirm locally
+                    if (
+                        not detected.is_set()
+                        and gray <= max_recent < threshold
+                        and (now - last_confirm) > 1.8
+                        and (now - last_fire) > 1.5
+                    ):
+                        last_confirm = now
+                        snapshot = np.concatenate((ring[ring_pos:], ring[:ring_pos]))
+                        rms = float(np.sqrt(np.mean(snapshot ** 2)))
+                        if rms >= 0.008 and self._confirm_wake_text(snapshot, wake_word):
+                            last_fire = now
+                            logger.info("Wake word detected (local confirm, peak=%.2f)", max_recent)
+                            try:
+                                model.reset()
+                            except Exception:
+                                pass
+                            detected.set()
+                            continue
                     if now - last_score_log >= 3.0:
                         if max_recent > 0:
-                            logger.info("Wake listening… peak score=%.2f (need >=%.2f)", max_recent, threshold)
-                        else:
-                            logger.debug("Wake listening… no speech scores yet")
+                            logger.debug("Wake listening… peak score=%.2f (need >=%.2f)", max_recent, threshold)
                         max_recent = 0.0
                         last_score_log = now
                     time.sleep(0.05)
@@ -323,16 +404,8 @@ class WhisperWakeWordDetector:
         )
         return " ".join(seg.text.strip() for seg in segments).strip().lower()
 
-    @classmethod
-    def _matches_wake(cls, text: str) -> bool:
-        if not text:
-            return False
-        cleaned = "".join(c if c.isalnum() or c.isspace() else " " for c in text.lower())
-        cleaned = " ".join(cleaned.split())
-        if any(kw in cleaned for kw in cls.KEYWORDS):
-            return True
-        tokens = cleaned.split()
-        return any(any(f in tok for f in cls.FUZZY) for tok in tokens)
+    def _matches_wake(self, text: str, wake_word: str = "jarvis") -> bool:
+        return text_matches_wake(text, wake_word)
 
     def _listen_loop(self) -> None:
         settings = self._settings
@@ -417,7 +490,7 @@ class WhisperWakeWordDetector:
                     text = self._transcribe_chunk(audio)
                     if text:
                         logger.info("Wake heard: %r (rms=%.3f)", text, rms)
-                    if self._matches_wake(text) and (time.time() - last_fire) > 1.5:
+                    if self._matches_wake(text, (settings.wake_word or "jarvis")) and (time.time() - last_fire) > 1.5:
                         last_fire = time.time()
                         logger.info("Wake word detected: %s", text)
                         self._paused.set()

@@ -16,9 +16,9 @@ _model_lock = threading.Lock()
 
 # Bias Whisper toward common Jarvis commands (helps Hinglish romanization)
 _INITIAL_PROMPT = (
-    "Jarvis commands: open Chrome, Chrome kholo, YouTube kholo, volume badha do, "
-    "volume kam karo, Google pe search karo, notepad kholo, music chalao, "
-    "shutdown, lock PC, screenshot."
+    "Jarvis commands: open Chrome, Chrome kholo, YouTube kholo, open WhatsApp, "
+    "send a WhatsApp message, volume badha do, volume kam karo, "
+    "Google pe search karo, notepad kholo, music chalao, shutdown, lock PC, screenshot."
 )
 
 
@@ -93,9 +93,12 @@ class SpeechToText:
         segments, info = model.transcribe(
             audio,
             language=language,
-            beam_size=5,
+            beam_size=1,
+            best_of=1,
             vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 300},
+            vad_parameters={"min_silence_duration_ms": 250},
+            condition_on_previous_text=False,
+            without_timestamps=True,
             initial_prompt=_INITIAL_PROMPT,
         )
         text = " ".join(seg.text.strip() for seg in segments).strip()

@@ -47,7 +47,7 @@ STATE_HINTS = {
     AssistantState.WAKE_WORD_DETECTED: "Microphone engaged",
     AssistantState.LISTENING_FOR_COMMAND: "Speak clearly — stop when finished",
     AssistantState.TRANSCRIBING: "Local speech recognition",
-    AssistantState.THINKING: "Consulting Ollama",
+    AssistantState.THINKING: "Consulting Gemini",
     AssistantState.EXECUTING: "Tool in progress",
     AssistantState.SPEAKING: "Local voice synthesis",
     AssistantState.AWAITING_CONFIRMATION: "Say yes to continue, or no to cancel",

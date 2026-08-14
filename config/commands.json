@@ -316,6 +316,110 @@
       "action": "open_project",
       "arguments": { "project": "unievent", "editor": "vscode" },
       "response": "Opening UniEvent."
+    },
+    {
+      "name": "close_chrome",
+      "intent": "CLOSE_APP",
+      "phrases": [
+        "close chrome", "quit chrome", "exit chrome", "chrome band karo",
+        "close google chrome"
+      ],
+      "action": "close_application",
+      "arguments": { "application": "chrome" },
+      "response": "Closing Chrome."
+    },
+    {
+      "name": "close_vscode",
+      "intent": "CLOSE_APP",
+      "phrases": [
+        "close vscode", "close vs code", "close visual studio code",
+        "quit vscode", "vs code band karo"
+      ],
+      "action": "close_application",
+      "arguments": { "application": "vscode" },
+      "response": "Closing VS Code."
+    },
+    {
+      "name": "close_spotify",
+      "intent": "CLOSE_APP",
+      "phrases": ["close spotify", "quit spotify", "spotify band karo"],
+      "action": "close_application",
+      "arguments": { "application": "spotify" },
+      "response": "Closing Spotify."
+    },
+    {
+      "name": "close_discord",
+      "intent": "CLOSE_APP",
+      "phrases": ["close discord", "quit discord"],
+      "action": "close_application",
+      "arguments": { "application": "discord" },
+      "response": "Closing Discord."
+    },
+    {
+      "name": "open_downloads",
+      "intent": "OPEN_FOLDER",
+      "phrases": [
+        "open downloads", "open download", "open my downloads",
+        "downloads kholo", "open the downloads folder"
+      ],
+      "action": "open_folder",
+      "arguments": { "path": "downloads" },
+      "response": "Opening Downloads."
+    },
+    {
+      "name": "open_documents",
+      "intent": "OPEN_FOLDER",
+      "phrases": [
+        "open documents", "open my documents", "open docs",
+        "documents kholo", "open the documents folder"
+      ],
+      "action": "open_folder",
+      "arguments": { "path": "documents" },
+      "response": "Opening Documents."
+    },
+    {
+      "name": "open_desktop",
+      "intent": "OPEN_FOLDER",
+      "phrases": [
+        "open desktop", "open my desktop", "desktop kholo",
+        "open the desktop folder"
+      ],
+      "action": "open_folder",
+      "arguments": { "path": "desktop" },
+      "response": "Opening Desktop."
+    },
+    {
+      "name": "open_google",
+      "intent": "OPEN_WEBSITE",
+      "phrases": [
+        "open google", "launch google", "google kholo", "open google.com"
+      ],
+      "action": "open_url",
+      "arguments": { "url": "https://www.google.com" },
+      "response": "Opening Google."
+    },
+    {
+      "name": "open_github",
+      "intent": "OPEN_WEBSITE",
+      "phrases": [
+        "open github", "launch github", "github kholo", "open git hub"
+      ],
+      "action": "open_url",
+      "arguments": { "url": "https://github.com" },
+      "response": "Opening GitHub."
+    },
+    {
+      "name": "open_whatsapp",
+      "intent": "OPEN_WHATSAPP",
+      "phrases": [
+        "open whatsapp", "launch whatsapp", "start whatsapp",
+        "open whatsapp web", "whatsapp kholo", "whatsapp open karo",
+        "open whatsapp on chrome", "whatsapp web kholo",
+        "open whatsapp web on chrome"
+      ],
+      "action": "open_whatsapp",
+      "arguments": {},
+      "response": "Opening WhatsApp Web."
     }
   ]
 }

@@ -14,8 +14,11 @@ a = Analysis(
     hiddenimports=[
         'app', 'app.core', 'app.brain', 'app.speech', 'app.wakeword',
         'app.tools', 'app.memory', 'app.ui',
+        'app.core.hotkey', 'app.core.startup', 'app.core.envfile',
+        'app.tools.app_catalog', 'app.ui.settings', 'app.ui.tray',
+        'app.brain.providers', 'app.brain.providers.gemini', 'app.brain.providers.ollama',
         'faster_whisper', 'openwakeword', 'piper', 'onnxruntime',
-        'PySide6', 'sounddevice', 'mss', 'pycaw',
+        'PySide6', 'sounddevice', 'mss', 'pycaw', 'win32com', 'win32com.client',
     ],
     hookspath=[],
     hooksconfig={},

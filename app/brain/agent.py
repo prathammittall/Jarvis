@@ -1,4 +1,4 @@
-"""JARVIS agent — fast router, then Grok, then Ollama fallback."""
+"""JARVIS agent — fast router, then Gemini, then Ollama fallback."""
 
 from __future__ import annotations
 
@@ -65,9 +65,13 @@ class Agent:
 
     def _filter_tools(self, command: str) -> list[dict[str, Any]]:
         all_schemas = self._registry.get_schemas()
+        if not self._settings.allow_llm_shell:
+            all_schemas = [t for t in all_schemas if t["name"] != "run_terminal_command"]
         cmd = command.lower()
         selected: set[str] = set(ALWAYS_INCLUDE_TOOLS)
         for tool_name, keywords in TOOL_FILTER_KEYWORDS.items():
+            if tool_name == "run_terminal_command" and not self._settings.allow_llm_shell:
+                continue
             if any(kw in cmd for kw in keywords):
                 selected.add(tool_name)
         filtered = [t for t in all_schemas if t["name"] in selected]
@@ -94,7 +98,7 @@ class Agent:
             _stop({})
             return {"response": "Stopped.", "success": True, "source": "fast"}
 
-        # 1) Fast local commands — never call Grok/Ollama
+        # 1) Fast local commands — never call Gemini/Ollama
         if self._settings.fast_commands_enabled:
             fast_result = self._fast.execute(command)
             if fast_result is not None:
@@ -129,13 +133,10 @@ class Agent:
                 self._emit_multilingual_debug(fast_result, timings.get("total", 0.0))
                 return fast_result
 
-        # 2) LLM path: Grok → Ollama
+        # 2) LLM path: Gemini → Ollama
         if not self._providers.any_available():
             return {
-                "response": (
-                    "No LLM is available. Fast commands still work. "
-                    "Set GROK_API_KEY or start Ollama for smarter requests."
-                ),
+                "response": "Sorry, I'm unable to process that right now.",
                 "success": False,
                 "source": "none",
             }
@@ -146,15 +147,21 @@ class Agent:
         return result
 
     def _log_perf(self, timings: dict[str, float], label: str = "LLM") -> None:
-        parts = []
-        for key in (
-            "fast_router", "grok", "ollama", "llm",
-            "tool_execution", "tts", "total",
-        ):
-            if key in timings:
-                parts.append(f"{key}={timings[key]:.3f}s")
-        if parts:
-            logger.info("[PERF][%s] %s", label, " | ".join(parts))
+        ms = {k: v * 1000.0 for k, v in timings.items()}
+        logger.info(
+            "Wake detection: %.0f ms | STT: %.0f ms | Router: %.0f ms | "
+            "Gemini: %.0f ms | Ollama fallback: %.0f ms | Action: %.0f ms | "
+            "TTS: %.0f ms | Total: %.0f ms [%s]",
+            ms.get("wake", 0.0),
+            ms.get("stt", 0.0),
+            ms.get("fast_router", ms.get("router", 0.0)),
+            ms.get("gemini", 0.0),
+            ms.get("ollama", 0.0),
+            ms.get("tool_execution", ms.get("action", 0.0)),
+            ms.get("tts", 0.0),
+            ms.get("total", 0.0),
+            label,
+        )
 
     def _emit_multilingual_debug(self, result: dict[str, Any], total: float) -> None:
         if not self._settings.debug_mode:
@@ -220,7 +227,7 @@ class Agent:
         except LLMError as e:
             logger.error("LLM provider error: %s", e)
             return {
-                "response": f"I couldn't reach an LLM. {e}",
+                "response": "Sorry, I'm unable to process that right now.",
                 "success": False,
                 "source": "none",
             }
@@ -231,7 +238,7 @@ class Agent:
 
         known_tools = {t.name for t in self._registry.list_tools()} | {"respond"}
 
-        # Prefer native tool call from Grok
+        # Prefer native tool call from Gemini
         if chat.has_tool_call:
             action = chat.tool_name or "respond"
             arguments = dict(chat.tool_arguments or {})
@@ -281,6 +288,12 @@ class Agent:
         tool = self._registry.get(action)
         if tool and tool.risk_level in (RiskLevel.CONFIRMATION_REQUIRED, RiskLevel.DANGEROUS):
             needs_confirmation = True
+
+        if needs_confirmation and self._settings.confirm_dangerous_actions:
+            trusted = self._settings.trusted_command_set()
+            power = str(arguments.get("action") or "").lower()
+            if action in trusted or (power and f"{action}:{power}" in trusted) or power in trusted:
+                needs_confirmation = False
 
         if needs_confirmation and self._settings.confirm_dangerous_actions:
             self._pending_action = {

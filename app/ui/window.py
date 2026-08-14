@@ -408,6 +408,10 @@ class JarvisWindow(QMainWindow):
         base = STATE_MESSAGES.get(self._state, "").rstrip(".…")
         self.status_label.setText(f"{base}{dots}")
 
+    def closeEvent(self, event) -> None:  # noqa: N802
+        event.ignore()
+        self.hide()
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()

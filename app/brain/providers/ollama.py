@@ -6,6 +6,7 @@ from typing import Any
 
 from app.brain.ollama_client import OllamaClient, OllamaError
 from app.brain.providers.base import ChatResult, LLMError, LLMProvider
+from app.config import get_settings
 from app.core.logger import get_logger
 
 logger = get_logger("provider.ollama")
@@ -22,6 +23,8 @@ class OllamaProvider(LLMProvider):
         return self._client
 
     def is_available(self) -> bool:
+        if not get_settings().ollama_enabled:
+            return False
         return self._client.is_running()
 
     def chat(

@@ -158,7 +158,8 @@ class FastCommandRouter:
         language = detect_language(stripped)
         normalized = normalize_verbs(stripped)
 
-        if _looks_complex(normalized) and _looks_complex(stripped):
+        whatsapp_like = "whatsapp" in normalized or "whats app" in normalized or "व्हाट्सएप" in stripped
+        if not whatsapp_like and _looks_complex(normalized) and _looks_complex(stripped):
             logger.debug("Fast router skip (complex): %r", normalized)
             return None
 
@@ -179,7 +180,13 @@ class FastCommandRouter:
             tool_call = intent_to_tool_call(parsed)
             if tool_call:
                 action, arguments = tool_call
-                target = parsed.target or arguments.get("application") or arguments.get("query") or ""
+                target = (
+                    parsed.target
+                    or arguments.get("application")
+                    or arguments.get("query")
+                    or arguments.get("contact")
+                    or ""
+                )
                 response = format_response(parsed.intent, language, target=str(target))
                 return FastCommand(
                     name=f"intent:{parsed.intent}",
@@ -231,10 +238,29 @@ class FastCommandRouter:
             return None
 
         settings = get_settings()
+        trusted = settings.trusted_command_set()
         needs_confirmation = tool.risk_level in (
             RiskLevel.CONFIRMATION_REQUIRED,
             RiskLevel.DANGEROUS,
         )
+        try:
+            from app.tools.app_catalog import requires_close_confirmation
+            if matched.action == "close_application" and requires_close_confirmation(
+                str(matched.arguments.get("application") or "")
+            ):
+                needs_confirmation = True
+        except Exception:
+            pass
+
+        action_key = matched.action.lower()
+        power_action = str(matched.arguments.get("action") or "").lower()
+        if needs_confirmation and (
+            action_key in trusted
+            or matched.name.lower() in trusted
+            or (power_action and f"{action_key}:{power_action}" in trusted)
+            or power_action in trusted
+        ):
+            needs_confirmation = False
 
         debug_info = {
             "speech": command,
@@ -330,7 +356,9 @@ def _guess_intent(action: str, arguments: dict[str, Any]) -> str:
         return "OPEN_APP"
     if action == "close_application":
         return "CLOSE_APP"
-    if action == "open_youtube":
+    if action == "open_folder":
+        return "OPEN_FOLDER"
+    if action in ("open_url", "open_youtube"):
         return "OPEN_WEBSITE"
     if action == "google_search":
         return "SEARCH_WEB"
@@ -362,6 +390,10 @@ def _guess_intent(action: str, arguments: dict[str, Any]) -> str:
         return "CREATE_FOLDER"
     if action == "get_time":
         return "GET_TIME"
+    if action == "open_whatsapp":
+        return "OPEN_WHATSAPP"
+    if action == "send_whatsapp_message":
+        return "SEND_WHATSAPP"
     return ""
 
 

@@ -1,117 +1,119 @@
-"""Application launching and control for Windows."""
+"""Application launching and control for Windows — optimized for low latency."""
 
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import winreg
 from typing import Any
 
+from app.core.logger import get_logger
+from app.tools import app_catalog
 from app.tools.registry import RiskLevel, ToolDefinition
 
-# Aliases -> search terms or known paths
-APP_ALIASES: dict[str, list[str]] = {
-    "chrome": ["Google Chrome", "chrome.exe"],
-    "google chrome": ["Google Chrome", "chrome.exe"],
-    "edge": ["Microsoft Edge", "msedge.exe"],
-    "microsoft edge": ["Microsoft Edge", "msedge.exe"],
-    "firefox": ["Mozilla Firefox", "firefox.exe"],
-    "vscode": ["Visual Studio Code", "Code.exe"],
-    "vs code": ["Visual Studio Code", "Code.exe"],
-    "visual studio code": ["Visual Studio Code", "Code.exe"],
-    "code": ["Visual Studio Code", "Code.exe"],
-    "terminal": ["Windows Terminal", "wt.exe"],
-    "windows terminal": ["Windows Terminal", "wt.exe"],
-    "cmd": ["cmd.exe"],
-    "command prompt": ["cmd.exe"],
-    "powershell": ["powershell.exe"],
-    "explorer": ["explorer.exe"],
-    "file explorer": ["explorer.exe"],
-    "notepad": ["notepad.exe"],
-    "calculator": ["Calculator", "calc.exe"],
-    "calc": ["Calculator", "calc.exe"],
-    "spotify": ["Spotify", "Spotify.exe"],
-    "discord": ["Discord", "Discord.exe"],
-}
+logger = get_logger("applications")
+
+# In-memory cache: app alias -> resolved path or shell name
+_path_cache: dict[str, str] = {}
 
 
-def _find_in_registry(app_name: str) -> str | None:
-    """Search Windows registry for application path."""
+def _expand(path: str) -> str:
+    return os.path.expandvars(path)
+
+
+def _app_paths_registry(exe_name: str) -> str | None:
+    """Lookup HKLM/HKCU App Paths — fast, no filesystem walk."""
     keys = [
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
-        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"),
+        (winreg.HKEY_CURRENT_USER, rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"),
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"),
     ]
-    for hive, base in keys:
+    for hive, key_path in keys:
         try:
-            with winreg.OpenKey(hive, base) as key:
-                for i in range(winreg.QueryInfoKey(key)[0]):
-                    subname = winreg.EnumKey(key, i)
-                    if app_name.lower() in subname.lower():
-                        with winreg.OpenKey(key, subname) as sub:
-                            path, _ = winreg.QueryValueEx(sub, "")
-                            if os.path.exists(path):
-                                return path
+            with winreg.OpenKey(hive, key_path) as key:
+                path, _ = winreg.QueryValueEx(key, "")
+                if path and os.path.isfile(path):
+                    return path
         except OSError:
-            pass
+            continue
+    return None
+
+
+def _probe_known(exe_name: str) -> str | None:
+    for candidate in app_catalog.known_paths().get(exe_name, []):
+        path = _expand(candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _which_fast(exe_name: str) -> str | None:
+    found = shutil.which(exe_name)
+    if found and os.path.isfile(found):
+        return found
     return None
 
 
 def _find_executable(name: str) -> str | None:
-    """Find application executable path."""
+    """Resolve an app to a launchable path/name without walking Program Files."""
     name_lower = name.lower().strip()
+    if name_lower in _path_cache:
+        return _path_cache[name_lower]
 
-    # Direct exe
-    if name_lower.endswith(".exe") and os.path.exists(name):
+    if name_lower.endswith(".exe") and os.path.isfile(name):
+        _path_cache[name_lower] = name
         return name
 
-    # Known aliases
-    aliases = APP_ALIASES.get(name_lower, [name])
-    for alias in aliases:
-        if alias.endswith(".exe"):
-            # Search PATH and common locations
-            found = _search_exe(alias)
-            if found:
-                return found
-            # Try start command (Windows resolves these)
-            return alias
-        path = _find_in_registry(alias)
+    candidates = app_catalog.alias_map().get(
+        name_lower,
+        [name if name_lower.endswith(".exe") else f"{name_lower}.exe", name],
+    )
+
+    for cand in candidates:
+        exe = cand if cand.lower().endswith(".exe") else None
+
+        # 1) Known install paths
+        if exe:
+            path = _probe_known(exe)
+            if path:
+                _path_cache[name_lower] = path
+                return path
+
+        # 2) App Paths registry (exact key)
+        if exe:
+            path = _app_paths_registry(exe)
+            if path:
+                _path_cache[name_lower] = path
+                return path
+
+        # 3) PATH lookup only (no directory walk)
+        check = exe or cand
+        path = _which_fast(check)
         if path:
+            _path_cache[name_lower] = path
             return path
-        found = _search_exe(f"{alias}.exe") if not alias.endswith(".exe") else _search_exe(alias)
-        if found:
-            return found
 
-    # Search Start Menu
-    start_paths = [
-        os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Start Menu\Programs"),
-        os.path.expandvars(r"%PROGRAMDATA%\Microsoft\Windows\Start Menu\Programs"),
-    ]
-    for sp in start_paths:
-        for root, _, files in os.walk(sp):
-            for f in files:
-                if f.lower().endswith(".lnk") and name_lower in f.lower():
-                    return os.path.join(root, f)
-
-    return None
+    # 4) Fall back to bare exe / alias — Windows `start` often resolves these
+    fallback = candidates[0]
+    _path_cache[name_lower] = fallback
+    return fallback
 
 
-def _search_exe(exe_name: str) -> str | None:
-    paths = os.environ.get("PATH", "").split(os.pathsep)
-    common = [
-        os.path.expandvars(r"%ProgramFiles%"),
-        os.path.expandvars(r"%ProgramFiles(x86)%"),
-        os.path.expandvars(r"%LOCALAPPDATA%"),
-    ]
-    for base in paths + common:
-        for root, _, files in os.walk(base) if base in common else [("", [], [exe_name])]:
-            if base in common:
-                if exe_name.lower() in [f.lower() for f in files]:
-                    return os.path.join(root, exe_name)
-            else:
-                candidate = os.path.join(base, exe_name)
-                if os.path.isfile(candidate):
-                    return candidate
-    return None
+def _launch(path: str) -> None:
+    """Fire-and-forget launch."""
+    if path.lower().endswith(".lnk"):
+        os.startfile(path)
+        return
+    # Shell builtins / PATH names: use start so Windows resolves them
+    if not os.path.isabs(path) or not os.path.isfile(path):
+        # Discord special-case: Update.exe --processStart Discord.exe
+        if path.lower().endswith("update.exe") and "discord" in path.lower():
+            subprocess.Popen([path, "--processStart", "Discord.exe"], shell=False)
+            return
+        subprocess.Popen(f'start "" "{path}"', shell=True)
+        return
+    subprocess.Popen([path], shell=False)
 
 
 def _open_app(args: dict[str, Any]) -> dict[str, Any]:
@@ -120,40 +122,57 @@ def _open_app(args: dict[str, Any]) -> dict[str, Any]:
         return {"success": False, "error": "No application specified."}
 
     path = _find_executable(app)
-    if path is None:
-        # Try os.startfile / start command as last resort
-        try:
-            os.startfile(app)
-            return {"success": True, "message": f"Opened {app}."}
-        except OSError:
-            return {"success": False, "error": f"Could not find application: {app}"}
-
+    display = app_catalog.display_name(app)
     try:
-        if path.endswith(".lnk"):
-            os.startfile(path)
-        elif path.endswith(".exe") and not os.path.isabs(path):
-            subprocess.Popen(["start", "", path], shell=True)
-        else:
-            subprocess.Popen([path], shell=False)
-        display = app.replace("_", " ").title()
-        return {"success": True, "message": f"Opening {display}."}
+        if path:
+            _launch(path)
+            logger.info("Opened %s via %s", app, path)
+            return {"success": True, "message": f"Opening {display}."}
+        os.startfile(app)
+        return {"success": True, "message": f"Opened {display}."}
+    except OSError as e:
+        _path_cache.pop(app.lower().strip(), None)
+        try:
+            subprocess.Popen(f'start "" "{app}"', shell=True)
+            return {"success": True, "message": f"Opening {display}."}
+        except Exception:
+            return {"success": False, "error": f"Could not find application: {app} ({e})"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 def _close_app(args: dict[str, Any]) -> dict[str, Any]:
     app = args.get("application", "")
-    exe_map = {
-        "chrome": "chrome.exe", "firefox": "firefox.exe", "edge": "msedge.exe",
-        "vscode": "Code.exe", "vs code": "Code.exe", "spotify": "Spotify.exe",
-        "discord": "Discord.exe", "notepad": "notepad.exe",
-    }
-    exe = exe_map.get(app.lower(), f"{app}.exe" if not app.endswith(".exe") else app)
+    if not app:
+        return {"success": False, "error": "No application specified."}
+    exe = app_catalog.close_exe(app)
+    display = app_catalog.display_name(app)
     try:
-        subprocess.run(["taskkill", "/IM", exe, "/F"], capture_output=True, timeout=10)
-        return {"success": True, "message": f"Closed {app}."}
+        result = subprocess.run(
+            ["taskkill", "/IM", exe, "/F"], capture_output=True, timeout=5, text=True,
+        )
+        if result.returncode != 0 and "not found" in (result.stderr or "").lower():
+            return {"success": False, "error": f"{display} is not running."}
+        return {"success": True, "message": f"Closed {display}."}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def _restart_app(args: dict[str, Any]) -> dict[str, Any]:
+    app = args.get("application", "")
+    if not app:
+        return {"success": False, "error": "No application specified."}
+    closed = _close_app({"application": app})
+    import time
+    time.sleep(0.4)
+    opened = _open_app({"application": app})
+    display = app_catalog.display_name(app)
+    if opened.get("success"):
+        return {"success": True, "message": f"Restarting {display}."}
+    return {
+        "success": False,
+        "error": opened.get("error") or closed.get("error") or f"Could not restart {display}.",
+    }
 
 
 def _open_project(args: dict[str, Any]) -> dict[str, Any]:
@@ -170,7 +189,8 @@ def _open_project(args: dict[str, Any]) -> dict[str, Any]:
         if code and os.path.isfile(code):
             subprocess.Popen([code, path])
         else:
-            os.startfile(path)
+            # `code` CLI is often on PATH
+            subprocess.Popen(f'code "{path}"', shell=True)
     else:
         os.startfile(path)
     return {"success": True, "message": f"Opening project {project}.", "path": path}
@@ -192,6 +212,14 @@ def register(registry) -> None:
         required=["application"],
         risk_level=RiskLevel.SAFE,
         execute=_close_app,
+    ))
+    registry.register(ToolDefinition(
+        name="restart_application",
+        description="Restart a desktop application (close then open)",
+        parameters={"application": {"type": "string", "description": "Application name or alias"}},
+        required=["application"],
+        risk_level=RiskLevel.SAFE,
+        execute=_restart_app,
     ))
     registry.register(ToolDefinition(
         name="open_project",
